@@ -91,6 +91,21 @@ p {
   -webkit-backdrop-filter: var(--ios-blur);
 }
 
+.topbar-brand {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.brand-logo {
+  display: block;
+  width: 6.4rem;
+  height: 2rem;
+  object-fit: contain;
+  object-position: left center;
+  margin: -0.22rem 0 -0.2rem -0.16rem;
+}
+
 .eyebrow {
   margin-bottom: 0.15rem;
   color: var(--muted);

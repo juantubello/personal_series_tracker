@@ -1,8 +1,8 @@
-const CACHE_NAME = "pipiseries-shell-v1";
+const CACHE_NAME = "pipiseries-shell-v2";
 const SHELL_ASSETS = [
   "/",
   "/manifest.webmanifest",
-  "/icon.svg",
+  "/brand-logo.png",
   "/icon-192.png",
   "/icon-512.png",
   "/apple-touch-icon.png"
