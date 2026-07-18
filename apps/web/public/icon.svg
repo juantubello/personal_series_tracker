@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="PipiSeries">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="80" x2="920" y2="940" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#201415"/>
+      <stop offset="0.48" stop-color="#3c1113"/>
+      <stop offset="1" stop-color="#062d42"/>
+    </linearGradient>
+    <linearGradient id="ticket" x1="244" y1="262" x2="780" y2="762" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffe26b"/>
+      <stop offset="1" stop-color="#ffbf10"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <path d="M269 326c0-55 45-100 100-100h286c55 0 100 45 100 100v372c0 55-45 100-100 100H369c-55 0-100-45-100-100V326Z" fill="url(#ticket)"/>
+  <path d="M389 377c0-33 27-60 60-60h126c33 0 60 27 60 60v270c0 33-27 60-60 60H449c-33 0-60-27-60-60V377Z" fill="#1f232a"/>
+  <path d="M471 409v206l154-103-154-103Z" fill="#fff"/>
+  <path d="M269 417h82v70h-82v-70Zm0 120h82v70h-82v-70Zm404-120h82v70h-82v-70Zm0 120h82v70h-82v-70Z" fill="#1f232a"/>
+</svg>

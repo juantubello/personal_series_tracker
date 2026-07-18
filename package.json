@@ -1,0 +1,19 @@
+{
+  "name": "pipiseries",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev -w @pipiseries/api\" \"npm run dev -w @pipiseries/web\"",
+    "build": "npm run build -w @pipiseries/api && npm run build -w @pipiseries/web",
+    "typecheck": "npm run typecheck -w @pipiseries/api && npm run typecheck -w @pipiseries/web",
+    "start:api": "npm run start -w @pipiseries/api",
+    "start:web": "npm run start -w @pipiseries/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}
