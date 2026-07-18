@@ -1,8 +1,7 @@
-import type { NextConfig } from "next";
-
 const apiUrl = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8080";
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   async rewrites() {
     return [
       {

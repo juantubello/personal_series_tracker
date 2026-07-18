@@ -1,6 +1,8 @@
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
+import { readFileSync, unlinkSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { db, defaultProfileSlugsForUser, getProfileBySlug, getProfiles, mapMediaRow, normalizeProfileSlugs, nowIso, seedBaseData } from "./db.js";
 import { config, hasTmdbCredentials } from "./env.js";
 import { isDevAuthEnabled, resolveCurrentUser } from "./auth.js";
@@ -117,7 +119,7 @@ type SeasonPayload = {
 
 const app = Fastify({
   logger: {
-    transport: config.isProduction ? undefined : { target: "pino-pretty" }
+    transport: !config.isProduction && process.env.PINO_PRETTY !== "false" ? { target: "pino-pretty" } : undefined
   }
 });
 const API_VERSION = "0.2.0-series-detail";
@@ -710,12 +712,178 @@ const addToList = (listId: string, mediaId: string, userId: string) => {
   `).run(listId, mediaId, userId, nowIso());
 };
 
+const writeTarString = (header: Buffer, value: string, offset: number, length: number) => {
+  header.write(value.slice(0, length), offset, length, "utf8");
+};
+
+const writeTarOctal = (header: Buffer, value: number, offset: number, length: number) => {
+  const octal = value.toString(8).padStart(length - 1, "0").slice(-(length - 1));
+  header.write(octal, offset, length - 1, "ascii");
+  header[offset + length - 1] = 0;
+};
+
+const tarGzSingleFile = (filename: string, contents: Buffer) => {
+  const blockSize = 512;
+  const header = Buffer.alloc(blockSize, 0);
+  const paddedSize = Math.ceil(contents.length / blockSize) * blockSize;
+  const paddedContents = Buffer.concat([contents, Buffer.alloc(paddedSize - contents.length)]);
+
+  writeTarString(header, filename, 0, 100);
+  writeTarOctal(header, 0o644, 100, 8);
+  writeTarOctal(header, 0, 108, 8);
+  writeTarOctal(header, 0, 116, 8);
+  writeTarOctal(header, contents.length, 124, 12);
+  writeTarOctal(header, Math.floor(Date.now() / 1000), 136, 12);
+  header.fill(0x20, 148, 156);
+  header[156] = "0".charCodeAt(0);
+  writeTarString(header, "ustar", 257, 6);
+  writeTarString(header, "00", 263, 2);
+
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  header.write(checksum.toString(8).padStart(6, "0"), 148, 6, "ascii");
+  header[154] = 0;
+  header[155] = 0x20;
+
+  return gzipSync(Buffer.concat([header, paddedContents, Buffer.alloc(blockSize * 2)]));
+};
+
 app.get("/health", async () => ({
   ok: true,
   service: "pipiseries-api",
   version: API_VERSION,
   tmdbConfigured: hasTmdbCredentials()
 }));
+
+app.get("/export", async (request, reply) => {
+  const exportedAt = nowIso();
+  const table = <T>(query: string) => db.prepare(query).all() as T[];
+
+  return reply
+    .header("content-disposition", `attachment; filename="pipiseries-export-${exportedAt.slice(0, 10)}.json"`)
+    .send({
+      exportedAt,
+      exportedBy: {
+        id: request.currentUser.id,
+        email: request.currentUser.email,
+        displayName: request.currentUser.displayName
+      },
+      version: API_VERSION,
+      notes: {
+        tmdbCacheIncluded: false
+      },
+      data: {
+        users: table("SELECT id, email, display_name AS displayName, created_at AS createdAt FROM users ORDER BY created_at ASC"),
+        profiles: table("SELECT id, slug, name, kind, owner_user_id AS ownerUserId, created_at AS createdAt FROM profiles ORDER BY created_at ASC"),
+        mediaItems: table(`
+          SELECT
+            id,
+            tmdb_id AS tmdbId,
+            media_type AS mediaType,
+            title,
+            original_title AS originalTitle,
+            overview,
+            poster_path AS posterPath,
+            backdrop_path AS backdropPath,
+            release_date AS releaseDate,
+            first_air_date AS firstAirDate,
+            vote_average AS voteAverage,
+            tmdb_json AS tmdbJson,
+            providers_json AS providersJson,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM media_items
+          ORDER BY title COLLATE NOCASE ASC
+        `),
+        watchEntries: table(`
+          SELECT
+            id,
+            profile_id AS profileId,
+            media_item_id AS mediaItemId,
+            status,
+            rating,
+            notes,
+            watched_at AS watchedAt,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM watch_entries
+          ORDER BY updated_at DESC
+        `),
+        seriesProgress: table(`
+          SELECT
+            id,
+            profile_id AS profileId,
+            media_item_id AS mediaItemId,
+            season_number AS seasonNumber,
+            episode_number AS episodeNumber,
+            episode_title AS episodeTitle,
+            updated_at AS updatedAt
+          FROM series_progress
+          ORDER BY updated_at DESC
+        `),
+        episodeWatches: table(`
+          SELECT
+            id,
+            profile_id AS profileId,
+            media_item_id AS mediaItemId,
+            season_number AS seasonNumber,
+            episode_number AS episodeNumber,
+            watched_at AS watchedAt,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM episode_watches
+          ORDER BY watched_at DESC
+        `),
+        lists: table(`
+          SELECT
+            id,
+            name,
+            icon,
+            profile_id AS profileId,
+            visibility,
+            created_by_user_id AS createdByUserId,
+            created_at AS createdAt,
+            updated_at AS updatedAt
+          FROM lists
+          ORDER BY updated_at DESC
+        `),
+        listItems: table(`
+          SELECT
+            list_id AS listId,
+            media_item_id AS mediaItemId,
+            added_by_user_id AS addedByUserId,
+            created_at AS createdAt
+          FROM list_items
+          ORDER BY created_at DESC
+        `)
+      }
+    });
+});
+
+app.get("/backup", async (request, reply) => {
+  const exportedAt = nowIso();
+  const date = exportedAt.slice(0, 10);
+  const sqliteFilename = `pipiseries-${date}.sqlite`;
+  const archiveFilename = `pipiseries-backup-${date}.tar.gz`;
+  const tmpPath = `/tmp/pipiseries-backup-${randomUUID()}.sqlite`;
+
+  try {
+    db.exec(`VACUUM INTO '${tmpPath.replace(/'/g, "''")}'`);
+    const archive = tarGzSingleFile(sqliteFilename, readFileSync(tmpPath));
+
+    request.log.info({ exportedBy: request.currentUser.email, archiveFilename }, "database backup generated");
+
+    return reply
+      .header("content-type", "application/gzip")
+      .header("content-disposition", `attachment; filename="${archiveFilename}"`)
+      .send(archive);
+  } finally {
+    try {
+      unlinkSync(tmpPath);
+    } catch {
+      // The temp file may not exist if SQLite failed before creating it.
+    }
+  }
+});
 
 app.get("/dev-auth/users", async (_request, reply) => {
   if (!isDevAuthEnabled()) {

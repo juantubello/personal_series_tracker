@@ -2101,6 +2101,74 @@ h3 {
   gap: 0.48rem;
 }
 
+.profile-header-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-settings-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  min-height: 2rem;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 850;
+  box-shadow: 0 4px 14px rgba(20, 24, 30, 0.06);
+}
+
+.settings-panel {
+  max-width: 24rem;
+}
+
+.settings-action-list {
+  display: grid;
+  gap: 0.58rem;
+}
+
+.settings-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.72rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  text-align: left;
+  box-shadow: 0 5px 18px rgba(20, 24, 30, 0.06);
+}
+
+.settings-action strong,
+.settings-action small {
+  display: block;
+}
+
+.settings-action strong {
+  font-size: 0.86rem;
+}
+
+.settings-action small {
+  margin-top: 0.12rem;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.settings-action:disabled {
+  opacity: 0.64;
+}
+
 .profile-search {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

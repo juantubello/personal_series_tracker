@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clapperboard,
+  Download,
   Film,
   Grid2X2,
   Home,
@@ -15,6 +16,7 @@ import {
   Plus,
   Save,
   Search,
+  Settings,
   Sparkles,
   Star,
   Trash2,
@@ -389,6 +391,9 @@ export default function HomePage() {
   const [profileMediaFilter, setProfileMediaFilter] = useState<ProfileMediaFilter>("all");
   const [profileRatingFilter, setProfileRatingFilter] = useState(0);
   const [profileSort, setProfileSort] = useState<ProfileSort>("updated_desc");
+  const [exportingData, setExportingData] = useState(false);
+  const [backingUpData, setBackingUpData] = useState(false);
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -418,6 +423,83 @@ export default function HomePage() {
   const showNotice = (message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 2800);
+  };
+
+  const fileDateAr = () => new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date()).replace(/\//g, "-");
+
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportDataJson = async () => {
+    setExportingData(true);
+    setError(null);
+
+    try {
+      const headers = new Headers();
+      if (activeDevEmail) {
+        headers.set("x-dev-user-email", activeDevEmail);
+      }
+
+      const response = await fetch(`${apiBase}/export`, {
+        headers,
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ error: "No se pudo exportar" }));
+        throw new Error(payload.error ?? "No se pudo exportar");
+      }
+
+      const blob = await response.blob();
+      downloadBlob(blob, `pipiseries-export-${fileDateAr()}.json`);
+      showNotice("Exportacion JSON lista");
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "No se pudo exportar");
+    } finally {
+      setExportingData(false);
+    }
+  };
+
+  const backupDataArchive = async () => {
+    setBackingUpData(true);
+    setError(null);
+
+    try {
+      const headers = new Headers();
+      if (activeDevEmail) {
+        headers.set("x-dev-user-email", activeDevEmail);
+      }
+
+      const response = await fetch(`${apiBase}/backup`, {
+        headers,
+        cache: "no-store"
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({ error: "No se pudo generar el backup" }));
+        throw new Error(payload.error ?? "No se pudo generar el backup");
+      }
+
+      const blob = await response.blob();
+      downloadBlob(blob, `pipiseries-backup-${fileDateAr()}.tar.gz`);
+      showNotice("Backup descargado");
+    } catch (backupError) {
+      setError(backupError instanceof Error ? backupError.message : "No se pudo generar el backup");
+    } finally {
+      setBackingUpData(false);
+    }
   };
 
   const loadDashboard = async (profiles = pairedProfilesFor(me?.user.profileSlug)) => {
@@ -1623,7 +1705,13 @@ export default function HomePage() {
 
       {!detailEntry && tab === "profile" && (
         <section className="screen">
-          <ProfileMultiSelect profiles={me?.profiles ?? []} selected={selectedProfiles} onToggle={toggleProfileFilter} />
+          <div className="profile-header-tools">
+            <ProfileMultiSelect profiles={me?.profiles ?? []} selected={selectedProfiles} onToggle={toggleProfileFilter} />
+            <button className="profile-settings-trigger" type="button" onClick={() => setProfileSettingsOpen(true)}>
+              <Settings size={17} />
+              <span>Ajustes</span>
+            </button>
+          </div>
 
           <section className="profile-tools">
             <label className="profile-search">
@@ -1736,6 +1824,16 @@ export default function HomePage() {
           busy={deletingList}
           onCancel={() => setDeleteListConfirmOpen(false)}
           onConfirm={deleteSelectedList}
+        />
+      )}
+
+      {profileSettingsOpen && (
+        <SettingsDialog
+          exporting={exportingData}
+          backingUp={backingUpData}
+          onClose={() => setProfileSettingsOpen(false)}
+          onExport={exportDataJson}
+          onBackup={backupDataArchive}
         />
       )}
     </main>
@@ -2889,6 +2987,47 @@ function ConfirmDialog({ eyebrow, title, text, confirmLabel, danger = false, bus
           <button className={`primary-dialog-action ${danger ? "danger" : ""}`} type="button" onClick={onConfirm} disabled={busy}>
             {busy ? <Loader2 className="spin" size={16} /> : danger ? <Trash2 size={16} /> : <CheckCircle2 size={16} />}
             <span>{confirmLabel}</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SettingsDialog({ exporting, backingUp, onClose, onExport, onBackup }: {
+  exporting: boolean;
+  backingUp: boolean;
+  onClose: () => void;
+  onExport: () => void;
+  onBackup: () => void;
+}) {
+  return (
+    <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label="Ajustes">
+      <section className="dialog-panel settings-panel">
+        <div className="dialog-header">
+          <div>
+            <p className="eyebrow">Configuracion</p>
+            <h2 className="dialog-title">Datos y backups</h2>
+          </div>
+          <button className="dialog-close" type="button" onClick={onClose} aria-label="Cerrar" disabled={exporting || backingUp}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="settings-action-list">
+          <button className="settings-action" type="button" onClick={onExport} disabled={exporting || backingUp}>
+            {exporting ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
+            <span>
+              <strong>Exportar JSON</strong>
+              <small>Datos legibles para revisar o migrar.</small>
+            </span>
+          </button>
+          <button className="settings-action" type="button" onClick={onBackup} disabled={exporting || backingUp}>
+            {backingUp ? <Loader2 className="spin" size={18} /> : <Save size={18} />}
+            <span>
+              <strong>Backup DB</strong>
+              <small>Descarga un `.tar.gz` con SQLite.</small>
+            </span>
           </button>
         </div>
       </section>

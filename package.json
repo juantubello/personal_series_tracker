@@ -10,7 +10,8 @@
     "build": "npm run build -w @pipiseries/api && npm run build -w @pipiseries/web",
     "typecheck": "npm run typecheck -w @pipiseries/api && npm run typecheck -w @pipiseries/web",
     "start:api": "npm run start -w @pipiseries/api",
-    "start:web": "npm run start -w @pipiseries/web"
+    "start:web": "npm run start -w @pipiseries/web",
+    "backup:docker": "sh scripts/backup-sqlite.sh"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
