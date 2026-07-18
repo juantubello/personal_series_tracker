@@ -28,6 +28,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         API_INTERNAL_URL: http://api:8080
+        NEXT_PUBLIC_CF_ACCESS_CLIENT_ID: ${NEXT_PUBLIC_CF_ACCESS_CLIENT_ID:-}
+        NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET: ${NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET:-}
     environment:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:8080
@@ -56,7 +58,7 @@ services:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARED_TOKEN}
+      TUNNEL_TOKEN: ${CLOUDFLARED_TOKEN:-}
     depends_on:
       nginx:
         condition: service_started

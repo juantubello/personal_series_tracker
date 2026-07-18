@@ -53,8 +53,9 @@ Para produccion:
 1. Completar `.env` en el servidor con `TMDB_ACCESS_TOKEN` o `TMDB_API_KEY`.
 2. Configurar `ENABLE_DEV_AUTH=false`.
 3. Completar `CLOUDFLARE_ACCESS_TEAM_DOMAIN` y `CLOUDFLARE_ACCESS_AUD`.
-4. Levantar con `docker compose up -d --build`.
-5. Apuntar Cloudflare Tunnel / Zero Trust al Nginx, por ejemplo `http://localhost:3000` si se publica desde el host.
+4. Si tu Access App usa Service Auth como tus otras apps, completar `NEXT_PUBLIC_CF_ACCESS_CLIENT_ID` y `NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET`.
+5. Levantar con `docker compose up -d --build`.
+6. Apuntar Cloudflare Tunnel / Zero Trust al Nginx, por ejemplo `http://127.0.0.1:3015` si se publica desde el host.
 
 El backend valida el header `Cf-Access-Jwt-Assertion` en produccion. Nginx lo reenvia a la API, asi que Cloudflare Access queda como puerta de entrada y la API no confia solamente en estar detras del proxy. El selector local de Juan/Cami solo aparece con `ENABLE_DEV_AUTH=true` y fuera de `NODE_ENV=production`.
 

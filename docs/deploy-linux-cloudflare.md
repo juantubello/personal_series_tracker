@@ -25,7 +25,10 @@ CAMI_EMAIL=email-de-cami@example.com
 CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://TU-TEAM.cloudflareaccess.com
 CLOUDFLARE_ACCESS_AUD=aud-tag-de-la-aplicacion
 
-HOST_HTTP_PORT=127.0.0.1:3000
+NEXT_PUBLIC_CF_ACCESS_CLIENT_ID=
+NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET=
+
+HOST_HTTP_PORT=127.0.0.1:3015
 CLOUDFLARED_TOKEN=
 ```
 
@@ -33,8 +36,11 @@ Notas:
 
 - En produccion, `ENABLE_DEV_AUTH` debe estar en `false`.
 - `JUAN_EMAIL` y `CAMI_EMAIL` tienen que coincidir con los emails autenticados por Cloudflare Access.
-- `HOST_HTTP_PORT=127.0.0.1:3000` deja Nginx accesible solo desde el servidor. Si usas el servicio `cloudflared` del compose, Cloudflare llega por la red interna Docker.
-- `CLOUDFLARED_TOKEN` es secreto. Va en `.env`, nunca en Git.
+- `NEXT_PUBLIC_CF_ACCESS_CLIENT_ID` y `NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET` son opcionales, pero si tu Access Application usa Service Auth como en tus otras apps, completalos con un Service Token propio de PipiSeries.
+- Esos `NEXT_PUBLIC_*` se incluyen en el build de Next y pueden verse en DevTools por usuarios autorizados.
+- Si cambias esos tokens, corre de nuevo `docker compose up -d --build` para regenerar el frontend.
+- `HOST_HTTP_PORT=127.0.0.1:3015` deja Nginx accesible solo desde el servidor y evita choque con otras apps.
+- `CLOUDFLARED_TOKEN` solo hace falta si queres correr `cloudflared` dentro de este compose. Si ya tenes un tunnel central en el host, dejalo vacio.
 
 ## 3. Crear La App En Cloudflare Access
 
@@ -50,38 +56,34 @@ En Cloudflare Zero Trust:
 
 La API valida el JWT que Cloudflare manda en `Cf-Access-Jwt-Assertion`, por eso esos dos valores son obligatorios en produccion.
 
-## 4. Crear El Tunnel
+## 4. Tunnel Existente En El Host
 
-Opcion recomendada: tunnel administrado desde Cloudflare y contenedor `cloudflared`.
+Si queres mantener el mismo patron de tus otras apps, usa el tunnel existente del servidor y agrega un public hostname:
 
-1. En Zero Trust, ir a `Networks > Connectors > Cloudflare Tunnels`.
-2. Crear o elegir un tunnel.
-3. Copiar el comando Docker/token de instalacion.
-4. Del comando, copiar solo el token y pegarlo como `CLOUDFLARED_TOKEN` en `.env`.
-5. En la ruta publicada del tunnel, apuntar el hostname a:
+```txt
+pipiseries.casapipis.net -> http://127.0.0.1:3015
+```
+
+En ese modo no necesitas `CLOUDFLARED_TOKEN`.
+
+Opcion alternativa: si queres que este compose tambien levante `cloudflared`, completa `CLOUDFLARED_TOKEN` y apunta el hostname del tunnel a:
 
 ```txt
 http://nginx:80
 ```
 
-Si no usas el contenedor `cloudflared` del compose y preferis instalarlo en el host, apuntalo a:
-
-```txt
-http://127.0.0.1:3000
-```
-
 ## 5. Levantar
 
-Con tunnel integrado:
-
-```bash
-docker compose --profile tunnel up -d --build
-```
-
-Sin tunnel integrado, solo app local en el servidor:
+Modo recomendado si ya tenes tunnel central:
 
 ```bash
 docker compose up -d --build
+```
+
+Modo opcional con tunnel integrado:
+
+```bash
+docker compose --profile tunnel up -d --build
 ```
 
 Ver estado:

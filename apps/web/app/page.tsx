@@ -240,6 +240,15 @@ type SeasonDetail = {
 };
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const cfAccessClientId = process.env.NEXT_PUBLIC_CF_ACCESS_CLIENT_ID ?? "";
+const cfAccessClientSecret = process.env.NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET ?? "";
+
+const addAccessHeaders = (headers: Headers) => {
+  if (cfAccessClientId && cfAccessClientSecret) {
+    headers.set("CF-Access-Client-Id", cfAccessClientId);
+    headers.set("CF-Access-Client-Secret", cfAccessClientSecret);
+  }
+};
 const profileOrder: ProfileSlug[] = ["juntos", "juan", "cami"];
 const listIconOptions = [
   "🍿", "🎬", "📺", "🎞️", "📽️", "🎥", "📼", "📀", "🎭", "🎟️",
@@ -405,6 +414,7 @@ export default function HomePage() {
     if (activeDevEmail) {
       headers.set("x-dev-user-email", activeDevEmail);
     }
+    addAccessHeaders(headers);
 
     const response = await fetch(`${apiBase}${path}`, {
       ...options,
@@ -451,6 +461,7 @@ export default function HomePage() {
       if (activeDevEmail) {
         headers.set("x-dev-user-email", activeDevEmail);
       }
+      addAccessHeaders(headers);
 
       const response = await fetch(`${apiBase}/export`, {
         headers,
@@ -481,6 +492,7 @@ export default function HomePage() {
       if (activeDevEmail) {
         headers.set("x-dev-user-email", activeDevEmail);
       }
+      addAccessHeaders(headers);
 
       const response = await fetch(`${apiBase}/backup`, {
         headers,
@@ -674,7 +686,9 @@ export default function HomePage() {
   useEffect(() => {
     const bootstrapAuth = async () => {
       try {
-        const response = await fetch(`${apiBase}/dev-auth/users`, { cache: "no-store" });
+        const headers = new Headers();
+        addAccessHeaders(headers);
+        const response = await fetch(`${apiBase}/dev-auth/users`, { headers, cache: "no-store" });
         if (response.ok) {
           const data = await response.json() as { users: DevUser[] };
           setDevUsers(data.users);
