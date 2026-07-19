@@ -155,6 +155,11 @@ Listas:
 Recomendados:
 
 - Debe existir opcion de recomendados para `Juan`, `Cami` y `Juntos`.
+- Debe existir filtro de tipo en Recomendaciones: `Todo`, `Series`, `Peliculas`.
+- Debe existir una accion tipo `Otra tanda` para variar resultados sin guardar historial pesado.
+- El backend soporta `GET /recommendations?profileSlug=juan&mediaType=tv&seed=...`.
+- `mediaType=tv` devuelve recomendaciones de series; `mediaType=movie` devuelve peliculas; `mediaType=all` mezcla ambos tipos.
+- `seed` rota base items, pagina de TMDB y orden final. Puede repetirse al reabrir la pantalla, pero al tocar `Otra tanda` debe mostrar variedad si TMDB tiene suficientes resultados.
 - Los recomendados iniciales deben basarse en la API de TMDB por item:
   - `/movie/{movie_id}/recommendations`
   - `/tv/{series_id}/recommendations`

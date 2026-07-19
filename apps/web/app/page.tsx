@@ -14,6 +14,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCcw,
   Save,
   Search,
   Settings,
@@ -34,6 +35,7 @@ type MediaType = "movie" | "tv";
 type WatchStatus = "watching" | "watched" | "paused" | "dropped" | "wishlist";
 type Tab = "home" | "search" | "lists" | "recs" | "profile";
 type ProfileMediaFilter = "all" | MediaType;
+type RecommendationMediaFilter = "all" | MediaType;
 type ProfileSort = "updated_desc" | "added_desc" | "name_asc" | "name_desc" | "watched_desc";
 
 type DevUser = {
@@ -379,6 +381,8 @@ export default function HomePage() {
   const [deletingList, setDeletingList] = useState(false);
   const [movingListItemId, setMovingListItemId] = useState<string | null>(null);
   const [recProfile, setRecProfile] = useState<ProfileSlug>("juntos");
+  const [recMediaFilter, setRecMediaFilter] = useState<RecommendationMediaFilter>("all");
+  const [recRefreshSeed, setRecRefreshSeed] = useState(0);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [detailEntry, setDetailEntry] = useState<Entry | null>(null);
@@ -608,10 +612,15 @@ export default function HomePage() {
     setProfileEntries(allData.items);
   };
 
-  const loadRecommendations = async (profile = recProfile) => {
+  const loadRecommendations = async (profile = recProfile, mediaFilter = recMediaFilter, seed = recRefreshSeed) => {
     setLoadingRecs(true);
     try {
-      const data = await requestApi<{ results: Recommendation[] }>(`/recommendations?profileSlug=${profile}`);
+      const params = new URLSearchParams({
+        profileSlug: profile,
+        mediaType: mediaFilter,
+        seed: String(seed)
+      });
+      const data = await requestApi<{ results: Recommendation[] }>(`/recommendations?${params.toString()}`);
       setRecommendations(data.results);
     } finally {
       setLoadingRecs(false);
@@ -735,7 +744,7 @@ export default function HomePage() {
     };
 
     void refresh();
-  }, [me, selectedProfiles.join(","), recProfile]);
+  }, [me, selectedProfiles.join(","), recProfile, recMediaFilter, recRefreshSeed]);
 
   const handleDevUserChange = (email: string) => {
     setActiveDevEmail(email);
@@ -1689,12 +1698,37 @@ export default function HomePage() {
 
       {!detailEntry && tab === "recs" && (
         <section className="screen">
-          <div className="profile-tabs">
-            {profileOrder.map((slug) => (
-              <button key={slug} className={recProfile === slug ? "active" : ""} onClick={() => setRecProfile(slug)} type="button">
-                {profileName(slug)}
+          <div className="recommendation-controls">
+            <div className="profile-tabs">
+              {profileOrder.map((slug) => (
+                <button key={slug} className={recProfile === slug ? "active" : ""} onClick={() => setRecProfile(slug)} type="button">
+                  {profileName(slug)}
+                </button>
+              ))}
+            </div>
+
+            <div className="recommendation-toolbar">
+              <div className="segmented recommendation-type-tabs" aria-label="Tipo de recomendacion">
+                {[
+                  ["all", "Todo"],
+                  ["tv", "Series"],
+                  ["movie", "Peliculas"]
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={recMediaFilter === value ? "active" : ""}
+                    onClick={() => setRecMediaFilter(value as RecommendationMediaFilter)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button className="secondary-pill refresh-recs" type="button" onClick={() => setRecRefreshSeed(Date.now())} disabled={loadingRecs}>
+                <RefreshCcw size={15} />
+                <span>Otra tanda</span>
               </button>
-            ))}
+            </div>
           </div>
 
           {loadingRecs && <div className="loading-line"><Loader2 className="spin" size={18} /> Buscando recomendados</div>}

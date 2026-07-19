@@ -329,11 +329,11 @@ export const getMediaDetails = async (mediaType: MediaType, tmdbId: number) => {
   };
 };
 
-export const getRecommendationsForItem = async (mediaType: MediaType, tmdbId: number) => {
+export const getRecommendationsForItem = async (mediaType: MediaType, tmdbId: number, page = 1) => {
   const namespace = mediaType === "movie" ? "movie" : "tv";
   const data = await tmdbFetch<{ results?: TmdbRawResult[] }>(`/${namespace}/${tmdbId}/recommendations`, {
     language: config.tmdb.language,
-    page: 1
+    page
   }, cacheTtl.recommendations);
 
   return (data.results ?? [])

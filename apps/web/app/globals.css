@@ -265,6 +265,41 @@ h3 {
   color: #fff;
 }
 
+.recommendation-controls {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.recommendation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.recommendation-type-tabs {
+  flex: 1;
+}
+
+.secondary-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0.42rem 0.64rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: #646871;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.secondary-pill:disabled {
+  opacity: 0.55;
+}
+
 .profile-multi-select {
   position: relative;
   z-index: 3;

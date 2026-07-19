@@ -148,6 +148,17 @@ const parseProfilesParam = (profiles: unknown, fallback: ProfileSlug[]) => {
   return profiles.split(",").map((value) => value.trim()).filter(Boolean) as ProfileSlug[];
 };
 
+const isMediaType = (value: unknown): value is MediaType => value === "movie" || value === "tv";
+
+const stableHash = (value: string) => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
 const providerPayload = (providersJson: string | null) => {
   if (!providersJson) return { providers: [], link: null };
   try {
@@ -1454,43 +1465,59 @@ app.delete("/lists/:id/items/:mediaId", async (request, reply) => {
 });
 
 app.get("/recommendations", async (request, reply) => {
-  const query = request.query as { profileSlug?: ProfileSlug };
+  const query = request.query as { profileSlug?: ProfileSlug; mediaType?: MediaType | "all"; seed?: string };
   const profileSlug = query.profileSlug ?? "juntos";
+  const mediaType = isMediaType(query.mediaType) ? query.mediaType : null;
+  const seed = typeof query.seed === "string" && query.seed.trim() ? query.seed.trim() : nowIso().slice(0, 10);
+  const seedHash = stableHash(`${profileSlug}:${mediaType ?? "all"}:${seed}`);
   const profile = getProfileBySlug(profileSlug);
 
-  const baseItems = db.prepare(`
+  const baseItemsQuery = `
     SELECT mi.tmdb_id AS tmdbId, mi.media_type AS mediaType
     FROM watch_entries we
     JOIN media_items mi ON mi.id = we.media_item_id
     WHERE we.profile_id = ?
       AND (we.status IN ('watched', 'watching') OR we.rating >= 4)
+      ${mediaType ? "AND mi.media_type = ?" : ""}
     ORDER BY COALESCE(we.rating, 0) DESC, we.updated_at DESC
-    LIMIT 8
-  `).all(profile.id) as Array<{ tmdbId: number; mediaType: MediaType }>;
+    LIMIT 24
+  `;
+  const baseItems = db.prepare(baseItemsQuery).all(...(mediaType ? [profile.id, mediaType] : [profile.id])) as Array<{ tmdbId: number; mediaType: MediaType }>;
+  const selectedBaseItems = [...baseItems]
+    .sort((a, b) => stableHash(`${seedHash}:${a.mediaType}:${a.tmdbId}`) - stableHash(`${seedHash}:${b.mediaType}:${b.tmdbId}`))
+    .slice(0, 8);
 
   const saved = db.prepare("SELECT tmdb_id || ':' || media_type AS key FROM media_items").all() as Array<{ key: string }>;
   const savedKeys = new Set(saved.map((item) => item.key));
   const results = new Map<string, TmdbSearchResult & { score: number }>();
 
   try {
-    for (const base of baseItems) {
-      const recommendations = await getRecommendationsForItem(base.mediaType, base.tmdbId);
+    for (const [index, base] of selectedBaseItems.entries()) {
+      const page = 1 + (stableHash(`${seedHash}:${base.mediaType}:${base.tmdbId}:${index}`) % 3);
+      let recommendations = await getRecommendationsForItem(base.mediaType, base.tmdbId, page);
+      if (recommendations.length === 0 && page !== 1) {
+        recommendations = await getRecommendationsForItem(base.mediaType, base.tmdbId, 1);
+      }
+
       for (const recommendation of recommendations) {
         const key = `${recommendation.tmdbId}:${recommendation.mediaType}`;
         if (savedKeys.has(key)) continue;
+        if (mediaType && recommendation.mediaType !== mediaType) continue;
 
         const current = results.get(key);
         results.set(key, {
           ...recommendation,
-          score: (current?.score ?? 0) + 1
+          score: (current?.score ?? 0) + 1 + (stableHash(`${seedHash}:${key}`) % 1000) / 100000
         });
       }
     }
 
     return {
       profileSlug,
+      mediaType: mediaType ?? "all",
+      seed,
       results: [...results.values()]
-        .sort((a, b) => b.score - a.score || (b.voteAverage ?? 0) - (a.voteAverage ?? 0))
+        .sort((a, b) => b.score - a.score || (b.voteAverage ?? 0) - (a.voteAverage ?? 0) || stableHash(`${seedHash}:${a.tmdbId}:${a.mediaType}`) - stableHash(`${seedHash}:${b.tmdbId}:${b.mediaType}`))
         .slice(0, 20)
     };
   } catch (error) {
