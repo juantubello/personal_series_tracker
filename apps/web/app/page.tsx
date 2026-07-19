@@ -403,6 +403,7 @@ export default function HomePage() {
   const [deletingList, setDeletingList] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ eyebrow: string; title: string; text: string; confirmLabel: string; run: () => void | Promise<void> } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [pinManagerProfile, setPinManagerProfile] = useState<ProfileSlug | null>(null);
   const [movingListItemId, setMovingListItemId] = useState<string | null>(null);
   const [recProfile, setRecProfile] = useState<ProfileSlug>("juntos");
   const [recMediaFilter, setRecMediaFilter] = useState<RecommendationMediaFilter>("all");
@@ -1602,7 +1603,15 @@ export default function HomePage() {
                 </div>
               </section>
 
-              <ContentRail title={`Siguiente capitulo ${profileName(activePersonalSlug)}`} empty={`Todavia no hay series en curso para ${profileName(activePersonalSlug)}.`}>
+              <ContentRail
+                title={`Siguiente capitulo ${profileName(activePersonalSlug)}`}
+                empty={`Todavia no hay series en curso para ${profileName(activePersonalSlug)}.`}
+                action={personalWatching.length > 0 ? (
+                  <button className="rail-action-btn" type="button" onClick={() => setPinManagerProfile(activePersonalSlug)}>
+                    <Pin size={14} /> Fijar
+                  </button>
+                ) : undefined}
+              >
                 {personalNextChapters.map((entry) => (
                   <EntryCard
                     key={entry.entryId}
@@ -1612,17 +1621,20 @@ export default function HomePage() {
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
                     onTogglePin={() => togglePin(entry)}
-                    onAdvance={() => updateEntry(entry, {
-                      status: "watching",
-                      seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
-                      episodeNumber: entry.episodeInfo?.nextEpisode?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
-                    })}
                     onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.nextEpisode)}
                   />
                 ))}
               </ContentRail>
 
-              <ContentRail title="Siguiente capitulo Juntos" empty="Todavia no hay series en curso para ver juntos.">
+              <ContentRail
+                title="Siguiente capitulo Juntos"
+                empty="Todavia no hay series en curso para ver juntos."
+                action={sharedWatching.length > 0 ? (
+                  <button className="rail-action-btn" type="button" onClick={() => setPinManagerProfile("juntos")}>
+                    <Pin size={14} /> Fijar
+                  </button>
+                ) : undefined}
+              >
                 {sharedNextChapters.map((entry) => (
                   <EntryCard
                     key={entry.entryId}
@@ -1632,11 +1644,6 @@ export default function HomePage() {
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
                     onTogglePin={() => togglePin(entry)}
-                    onAdvance={() => updateEntry(entry, {
-                      status: "watching",
-                      seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
-                      episodeNumber: entry.episodeInfo?.nextEpisode?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
-                    })}
                     onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.nextEpisode)}
                   />
                 ))}
@@ -2033,6 +2040,39 @@ export default function HomePage() {
         />
       )}
 
+      {pinManagerProfile && (
+        <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label="Administrar fijadas">
+          <section className="dialog-panel settings-panel">
+            <div className="dialog-header">
+              <div>
+                <p className="eyebrow">Fijar en Inicio</p>
+                <h2 className="dialog-title">Siguiente capitulo · {profileName(pinManagerProfile)}</h2>
+              </div>
+              <button className="dialog-close" type="button" onClick={() => setPinManagerProfile(null)} aria-label="Cerrar">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="helper">Fija las series que quieras ver siempre. Las no fijadas comparten un unico lugar (la mas reciente).</p>
+            <div className="pin-manager-list">
+              {(dashboard?.watching.filter((entry) => entry.profile.slug === pinManagerProfile) ?? []).length === 0 && (
+                <EmptyState title="No hay series en curso para fijar" />
+              )}
+              {(dashboard?.watching.filter((entry) => entry.profile.slug === pinManagerProfile) ?? []).map((entry) => (
+                <button
+                  key={entry.entryId}
+                  className={`pin-manager-row ${entry.pinned ? "active" : ""}`}
+                  type="button"
+                  onClick={() => togglePin(entry)}
+                >
+                  <span className="pin-manager-title">{entry.media.title}</span>
+                  <span className="pin-manager-state">{entry.pinned ? "Fijada" : "Fijar"}<Pin size={15} /></span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+
       {profileSettingsOpen && (
         <SettingsDialog
           exporting={exportingData}
@@ -2316,13 +2356,16 @@ function ProfilePicker({ profiles, selected, onToggle }: { profiles: Profile[]; 
   );
 }
 
-function ContentRail({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {
+function ContentRail({ title, empty, children, action }: { title: string; empty: string; children: ReactNode; action?: ReactNode }) {
   const list = Array.isArray(children) ? children.filter(Boolean) : children;
   const isEmpty = Array.isArray(list) ? list.length === 0 : !list;
 
   return (
     <section className="content-rail">
-      <h2><span>{title}</span></h2>
+      <div className="rail-header">
+        <h2><span>{title}</span></h2>
+        {action && <div className="rail-action">{action}</div>}
+      </div>
       {isEmpty ? <EmptyState title={empty} /> : <div className="rail-items">{children}</div>}
     </section>
   );
@@ -3115,6 +3158,12 @@ function SearchCard({ result, opening = false, onOpen, onSave }: { result: Searc
       <button className="search-card-open" type="button" onClick={canOpen ? onOpen : undefined} disabled={!canOpen} aria-label={canOpen ? `Abrir ${result.title}` : undefined}>
         <span className="poster">
           {poster ? <img src={poster} alt="" /> : result.mediaType === "tv" ? <Tv size={28} /> : <Film size={28} />}
+          {result.saved && !opening && (
+            <span className={`poster-status-overlay status-${result.saved.status}`}>
+              <strong>{statusLabel[result.saved.status]}</strong>
+              <small>{result.saved.profileName}</small>
+            </span>
+          )}
           {opening && <span className="poster-loading"><Loader2 className="spin" size={18} /></span>}
         </span>
         <span className="search-card-copy">

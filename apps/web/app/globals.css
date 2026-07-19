@@ -430,6 +430,83 @@ h3 {
   gap: 0.52rem;
 }
 
+.rail-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-action {
+  position: absolute;
+  right: 0;
+}
+
+.rail-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: #646871;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.pin-manager-list {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.pin-manager-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.6rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--soft);
+  color: var(--ink);
+  text-align: left;
+}
+
+.pin-manager-row.active {
+  border-color: var(--accent-dark);
+  background: rgba(255, 213, 31, 0.2);
+}
+
+.pin-manager-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pin-manager-state {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.28rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.pin-manager-row.active .pin-manager-state {
+  color: #6f5900;
+}
+
 .rail-title-row {
   display: flex;
   align-items: center;
@@ -1571,6 +1648,46 @@ h3 {
   place-items: center;
   background: rgba(20, 24, 30, 0.46);
   color: #fff;
+}
+
+.poster-status-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.12rem;
+  padding: 0.3rem;
+  background: rgba(15, 18, 24, 0.22);
+  color: #fff;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+}
+
+.poster-status-overlay strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.poster-status-overlay small {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.poster-status-overlay.status-watched {
+  background: rgba(6, 78, 52, 0.26);
+}
+
+.poster-status-overlay.status-watching {
+  background: rgba(110, 84, 0, 0.26);
+}
+
+.poster-status-overlay.status-wishlist {
+  background: rgba(15, 18, 24, 0.18);
 }
 
 .media-body {
