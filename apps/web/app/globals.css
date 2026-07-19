@@ -877,6 +877,30 @@ h3 {
   width: min(13rem, 64vw);
 }
 
+.wishlist-picker-popover {
+  width: min(13rem, 64vw);
+}
+
+.mini-profile-picker {
+  display: grid;
+  gap: 0.32rem;
+  margin-bottom: 0.42rem;
+}
+
+.mini-profile-picker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.05rem;
+  padding: 0 0.62rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
 .mini-confirm-actions {
   display: flex;
   justify-content: flex-end;

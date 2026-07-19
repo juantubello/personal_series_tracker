@@ -1233,17 +1233,13 @@ export default function HomePage() {
     }
   };
 
-  const addDetailToCurrentWishlist = async () => {
+  const addDetailToWishlist = async (profileSlug: ProfileSlug) => {
     if (!detailEntry) return;
 
-    const targetProfileSlug = currentPersonalProfileSlug();
-    const targetProfileName = profileName(targetProfileSlug);
-    const existing = await loadDetailUserEntry(detailEntry);
-
-    if (!detailEntry.entryId.startsWith("preview:") && detailEntry.status !== "wishlist") {
-      showNotice(`Ya esta en ${statusLabel[detailEntry.status]} ${detailEntry.profile.name}`);
-      return;
-    }
+    const targetProfileName = profileName(profileSlug);
+    // Chequeamos el estado de ESE perfil puntual para no pisar un watching/watched.
+    const data = await requestApi<{ items: Entry[] }>(`/media?profiles=${profileSlug}`);
+    const existing = data.items.find((item) => item.media.id === detailEntry.media.id) ?? null;
 
     if (existing) {
       showNotice(existing.status === "wishlist"
@@ -1255,13 +1251,13 @@ export default function HomePage() {
     await requestApi(`/media/${detailEntry.media.id}/entry`, {
       method: "POST",
       body: JSON.stringify({
-        profileSlugs: [targetProfileSlug],
+        profileSlugs: [profileSlug],
         status: "wishlist",
         rating: null
       })
     });
     showNotice(`Agregada a Quiero ver ${targetProfileName}`);
-    await Promise.all([loadDashboard(), loadProfileCollections(), loadSeriesOverview(detailEntry), loadDetailUserEntry(detailEntry)]);
+    await Promise.all([loadDashboard(), loadProfileCollections(), loadSeriesOverview(detailEntry, { preserveSeason: true }), loadDetailUserEntry(detailEntry)]);
   };
 
   const removeDetailFromCurrentWishlist = async () => {
@@ -1472,12 +1468,13 @@ export default function HomePage() {
           onEpisodeWatched={markEpisodeWatched}
           onListTargetChange={setDetailListTargetId}
           onAddToList={addDetailEntryToList}
-          onAddToWishlist={addDetailToCurrentWishlist}
+          onAddToWishlist={addDetailToWishlist}
           onRemoveFromWishlist={removeDetailFromCurrentWishlist}
           onEditProfile={() => openEntryProfileEditor(detailEntry)}
           onRating={(rating) => updateEntry(detailEntry, { rating })}
           onMarkWatched={() => updateEntry(detailEntry, { status: "watched" })}
           wishlistProfileName={profileName(currentPersonalProfileSlug())}
+          wishlistProfiles={profileOrder.map((slug) => ({ slug, name: profileName(slug) }))}
           wishlistEntryStatus={detailUserEntry?.status ?? null}
         />
       )}
@@ -2357,6 +2354,7 @@ function SeriesDetail({
   listTargetId,
   listMemberships,
   wishlistProfileName,
+  wishlistProfiles,
   wishlistEntryStatus,
   onBack,
   onSeasonChange,
@@ -2385,6 +2383,7 @@ function SeriesDetail({
   listTargetId: string;
   listMemberships: SavedList[];
   wishlistProfileName: string;
+  wishlistProfiles: { slug: ProfileSlug; name: string }[];
   wishlistEntryStatus: WatchStatus | null;
   onBack: () => void;
   onSeasonChange: (season: number) => void;
@@ -2394,7 +2393,7 @@ function SeriesDetail({
   onEpisodeWatched: (episode: SeasonEpisode) => void;
   onListTargetChange: (listId: string) => void;
   onAddToList: () => void | Promise<void>;
-  onAddToWishlist: () => void | Promise<void>;
+  onAddToWishlist: (profileSlug: ProfileSlug) => void | Promise<void>;
   onRemoveFromWishlist: () => void | Promise<void>;
   onEditProfile: () => void;
   onRating: (rating: number | null) => void;
@@ -2421,6 +2420,7 @@ function SeriesDetail({
   const [listPickerOpen, setListPickerOpen] = useState(false);
   const [markConfirmOpen, setMarkConfirmOpen] = useState(false);
   const [wishlistConfirmOpen, setWishlistConfirmOpen] = useState(false);
+  const [wishlistPickerOpen, setWishlistPickerOpen] = useState(false);
   const activeListTargetId = listTargetId || lists[0]?.id || "";
   const isSavedEntry = !entry.entryId.startsWith("preview:");
   const canUseWishlistAction = entry.entryId.startsWith("preview:") || entry.status === "wishlist";
@@ -2554,6 +2554,7 @@ function SeriesDetail({
                       setListPickerOpen((open) => !open);
                       setMarkConfirmOpen(false);
                       setWishlistConfirmOpen(false);
+                      setWishlistPickerOpen(false);
                     }}
                     aria-label="Agregar a una lista"
                     aria-expanded={listPickerOpen}
@@ -2609,15 +2610,16 @@ function SeriesDetail({
                       setListPickerOpen(false);
                       setMarkConfirmOpen(false);
                       if (isInCurrentWishlist) {
+                        setWishlistPickerOpen(false);
                         setWishlistConfirmOpen((open) => !open);
                         return;
                       }
                       setWishlistConfirmOpen(false);
-                      void onAddToWishlist();
+                      setWishlistPickerOpen((open) => !open);
                     }}
-                    aria-label={wishlistEntryStatus === "wishlist" ? `Quitar de Quiero ver ${wishlistProfileName}` : `Agregar a Quiero ver ${wishlistProfileName}`}
-                    aria-expanded={wishlistConfirmOpen}
-                    title={wishlistEntryStatus ? `Ya esta en ${statusLabel[wishlistEntryStatus]} ${wishlistProfileName}` : `Quiero ver ${wishlistProfileName}`}
+                    aria-label={wishlistEntryStatus === "wishlist" ? `Quitar de Quiero ver ${wishlistProfileName}` : "Agregar a Quiero ver"}
+                    aria-expanded={wishlistConfirmOpen || wishlistPickerOpen}
+                    title={wishlistEntryStatus ? `Ya esta en ${statusLabel[wishlistEntryStatus]} ${wishlistProfileName}` : "Agregar a Quiero ver"}
                   >
                     <Bookmark size={18} />
                   </button>
@@ -2638,6 +2640,29 @@ function SeriesDetail({
                       </div>
                     </div>
                   )}
+                  {wishlistPickerOpen && !isInCurrentWishlist && (
+                    <div className="mini-popover wishlist-picker-popover">
+                      <p>Agregar a Quiero ver</p>
+                      <div className="mini-profile-picker">
+                        {wishlistProfiles.map((profile) => (
+                          <button
+                            key={profile.slug}
+                            type="button"
+                            onClick={() => {
+                              void onAddToWishlist(profile.slug);
+                              setWishlistPickerOpen(false);
+                            }}
+                          >
+                            {profile.slug === "juntos" ? <Users size={15} /> : <UserRound size={15} />}
+                            {profile.name}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mini-confirm-actions">
+                        <button type="button" onClick={() => setWishlistPickerOpen(false)}>Cerrar</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="quick-action-wrap">
@@ -2648,6 +2673,7 @@ function SeriesDetail({
                       setMarkConfirmOpen((open) => !open);
                       setListPickerOpen(false);
                       setWishlistConfirmOpen(false);
+                      setWishlistPickerOpen(false);
                     }}
                     disabled={entry.status === "watched"}
                     aria-label="Marcar serie como vista"
