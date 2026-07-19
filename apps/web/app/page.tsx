@@ -398,6 +398,8 @@ export default function HomePage() {
   const [listIconDraft, setListIconDraft] = useState(listIconOptions[0]);
   const [deleteListConfirmOpen, setDeleteListConfirmOpen] = useState(false);
   const [deletingList, setDeletingList] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ eyebrow: string; title: string; text: string; confirmLabel: string; run: () => void | Promise<void> } | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [movingListItemId, setMovingListItemId] = useState<string | null>(null);
   const [recProfile, setRecProfile] = useState<ProfileSlug>("juntos");
   const [recMediaFilter, setRecMediaFilter] = useState<RecommendationMediaFilter>("all");
@@ -1114,6 +1116,17 @@ export default function HomePage() {
     showNotice(`${entry.media.title} eliminado de ${entry.profile.name}`);
   };
 
+  const runConfirmAction = async () => {
+    if (!confirmAction) return;
+    setConfirmBusy(true);
+    try {
+      await confirmAction.run();
+      setConfirmAction(null);
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   const openEntryProfileEditor = (entry: Entry) => {
     setEditingProfileEntry(entry);
     setSaveProfiles([entry.profile.slug]);
@@ -1745,7 +1758,16 @@ export default function HomePage() {
           onNameSubmit={updateListName}
           onRetry={() => loadListDetail(selectedListId)}
           onOpenEntry={openEntryDetail}
-          onRemoveItem={removeListItem}
+          onRemoveItem={(mediaId) => {
+            const item = listDetail?.items.find((entry) => entry.media.id === mediaId);
+            setConfirmAction({
+              eyebrow: "Quitar de la lista",
+              title: item?.media.title ?? "Item",
+              text: `Se quita de "${listDetail?.list.name ?? "la lista"}". La serie o pelicula sigue en tu perfil.`,
+              confirmLabel: "Quitar",
+              run: () => removeListItem(mediaId)
+            });
+          }}
           onMoveItem={moveListItem}
           onEditProfile={openEntryProfileEditor}
         />
@@ -1906,7 +1928,13 @@ export default function HomePage() {
                 onEditProfile={() => openEntryProfileEditor(entry)}
                 onTogglePin={entry.status === "watching" && entry.media.mediaType === "tv" ? () => togglePin(entry) : undefined}
                 onRating={(rating) => updateEntry(entry, { rating })}
-                onRemove={() => deleteEntry(entry)}
+                onRemove={() => setConfirmAction({
+                  eyebrow: "Eliminar de tu perfil",
+                  title: entry.media.title,
+                  text: `Se elimina de ${entry.profile.name} junto a su progreso y estado. Esta accion no se puede deshacer.`,
+                  confirmLabel: "Eliminar",
+                  run: () => deleteEntry(entry)
+                })}
               />
             ))}
           </ContentRail>
@@ -1968,6 +1996,19 @@ export default function HomePage() {
           busy={deletingList}
           onCancel={() => setDeleteListConfirmOpen(false)}
           onConfirm={deleteSelectedList}
+        />
+      )}
+
+      {confirmAction && (
+        <ConfirmDialog
+          eyebrow={confirmAction.eyebrow}
+          title={confirmAction.title}
+          text={confirmAction.text}
+          confirmLabel={confirmAction.confirmLabel}
+          danger
+          busy={confirmBusy}
+          onCancel={() => { if (!confirmBusy) setConfirmAction(null); }}
+          onConfirm={runConfirmAction}
         />
       )}
 
