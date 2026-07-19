@@ -350,6 +350,7 @@ export default function HomePage() {
   const [lists, setLists] = useState<SavedList[]>([]);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchTypeFilter, setSearchTypeFilter] = useState<ProfileMediaFilter>("all");
   const [searching, setSearching] = useState(false);
   const [openingResultKey, setOpeningResultKey] = useState<string | null>(null);
   const [saveDialogResult, setSaveDialogResult] = useState<SearchResult | null>(null);
@@ -1129,7 +1130,6 @@ export default function HomePage() {
   };
 
   const openEntryDetail = (entry: Entry) => {
-    if (entry.media.mediaType !== "tv") return;
     detailRequestKeyRef.current = detailEntryKey(entry);
     setDetailEntry(entry);
     setDetailSeason(initialSeasonForProgress(entry.progress));
@@ -1143,8 +1143,6 @@ export default function HomePage() {
   };
 
   const openResultDetail = async (result: SearchResult, fallbackProfile: ProfileSlug) => {
-    if (result.mediaType !== "tv") return;
-
     const resultKey = `${result.mediaType}-${result.tmdbId}`;
     setOpeningResultKey(resultKey);
     setError(null);
@@ -1157,7 +1155,7 @@ export default function HomePage() {
       const data = await requestApi<{ entry: Entry }>(`/media/preview?${params.toString()}`);
       openEntryDetail(data.entry);
     } catch (openError) {
-      setError(openError instanceof Error ? openError.message : "No se pudo abrir la serie");
+      setError(openError instanceof Error ? openError.message : "No se pudo abrir el detalle");
     } finally {
       setOpeningResultKey(null);
     }
@@ -1280,10 +1278,10 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    if (!detailEntry) return;
+    if (!detailEntry || detailEntry.media.mediaType !== "tv") return;
 
     void loadSeriesOverview(detailEntry);
-  }, [detailEntry?.media.id, detailEntry?.profile.slug, activeDevEmail]);
+  }, [detailEntry?.media.id, detailEntry?.profile.slug, detailEntry?.media.mediaType, activeDevEmail]);
 
   useEffect(() => {
     if (!detailEntry || !viewingSeason) return;
@@ -1625,16 +1623,31 @@ export default function HomePage() {
 
           <p className="helper search-helper">Al guardar te voy a preguntar quien la ve, y despues tambien lo podes cambiar.</p>
 
+          {searchResults.length > 0 && (
+            <div className="segmented compact-segmented">
+              {([["all", "Todo"], ["tv", "Series"], ["movie", "Peliculas"]] as [ProfileMediaFilter, string][]).map(([value, label]) => (
+                <button key={value} className={searchTypeFilter === value ? "active" : ""} type="button" onClick={() => setSearchTypeFilter(value)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="result-list poster-grid">
-            {searchResults.map((result) => (
-              <SearchCard
-                key={`${result.mediaType}-${result.tmdbId}`}
-                result={result}
-                opening={openingResultKey === `${result.mediaType}-${result.tmdbId}`}
-                onOpen={() => openResultDetail(result, me?.user.profileSlug ?? "juan")}
-                onSave={() => openSaveDialog(result, result.saved?.status ?? "wishlist")}
-              />
-            ))}
+            {searchResults
+              .filter((result) => searchTypeFilter === "all" || result.mediaType === searchTypeFilter)
+              .map((result) => (
+                <SearchCard
+                  key={`${result.mediaType}-${result.tmdbId}`}
+                  result={result}
+                  opening={openingResultKey === `${result.mediaType}-${result.tmdbId}`}
+                  onOpen={() => openResultDetail(result, me?.user.profileSlug ?? "juan")}
+                  onSave={() => openSaveDialog(result, result.saved?.status ?? "wishlist")}
+                />
+              ))}
+            {searchResults.length > 0 && searchResults.every((result) => searchTypeFilter !== "all" && result.mediaType !== searchTypeFilter) && (
+              <EmptyState title={`No hay ${searchTypeFilter === "tv" ? "series" : "peliculas"} en estos resultados`} />
+            )}
           </div>
         </section>
       )}
@@ -1784,14 +1797,14 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+            <div className="segmented compact-segmented">
+              {([["all", "Ambos"], ["tv", "Series"], ["movie", "Peliculas"]] as [ProfileMediaFilter, string][]).map(([value, label]) => (
+                <button key={value} className={profileMediaFilter === value ? "active" : ""} type="button" onClick={() => setProfileMediaFilter(value)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="profile-filter-row">
-              <label className="mini-select">
-                <select value={profileMediaFilter} onChange={(event) => setProfileMediaFilter(event.target.value as ProfileMediaFilter)}>
-                  <option value="all">Series y peliculas</option>
-                  <option value="tv">Series</option>
-                  <option value="movie">Peliculas</option>
-                </select>
-              </label>
               <label className="mini-select">
                 <select value={profileRatingFilter} onChange={(event) => setProfileRatingFilter(Number(event.target.value))}>
                   <option value={0}>Todas las estrellas</option>
@@ -2266,7 +2279,7 @@ function HomeWishlistCard({ item, onOpen, onEditProfile, onRemove }: {
   const entry = item.entry;
   const poster = posterUrl(entry?.media.posterPath ?? item.media.posterPath, "w342") ?? posterUrl(item.media.backdropPath, "w300");
   const StatusIcon = entry ? statusIcon[entry.status] : Bookmark;
-  const canOpen = Boolean(entry && onOpen && item.media.mediaType === "tv");
+  const canOpen = Boolean(entry && onOpen);
   const primaryList = item.lists[0];
   const isWatching = entry?.status === "watching";
 
@@ -2425,6 +2438,9 @@ function SeriesDetail({
   const isSavedEntry = !entry.entryId.startsWith("preview:");
   const canUseWishlistAction = entry.entryId.startsWith("preview:") || entry.status === "wishlist";
   const isInCurrentWishlist = canUseWishlistAction && wishlistEntryStatus === "wishlist";
+  const isMovie = entry.media.mediaType === "movie";
+  const heroYearRaw = series?.year ?? yearForMedia(entry.media);
+  const heroYear = heroYearRaw && heroYearRaw !== "Sin fecha" ? heroYearRaw : null;
   const metaItems = showingSeasonHero ? (
     <>
       {selectedSeasonInfo?.year && <span>{selectedSeasonInfo.year}</span>}
@@ -2452,7 +2468,7 @@ function SeriesDetail({
       <section className="tmdb-hero" style={backdrop ? { "--hero-image": `url(${backdrop})` } as CSSProperties : undefined}>
         <div className="tmdb-poster-stack">
           <div className="tmdb-poster">
-            {poster ? <img src={poster} alt="" /> : <Tv size={34} />}
+            {poster ? <img src={poster} alt="" /> : isMovie ? <Film size={34} /> : <Tv size={34} />}
           </div>
           {visibleProviders.length > 0 && (
             <div className={`poster-provider-row ${visibleProviders.length === 1 ? "single" : ""}`} aria-label="Donde ver">
@@ -2501,7 +2517,7 @@ function SeriesDetail({
           <div className="series-heading">
             <h2>{showingSeasonHero ? selectedSeasonInfo?.name : series?.title ?? entry.media.title}</h2>
             <div className="title-meta-line">
-              {!showingSeasonHero && series?.year && <span className="series-year">{series.year}</span>}
+              {!showingSeasonHero && heroYear && <span className="series-year">{heroYear}</span>}
               <div className="tmdb-meta">
                 {rating > 0 && <strong>{rating}%</strong>}
                 {metaItems}
@@ -2525,14 +2541,21 @@ function SeriesDetail({
           ) : (
             <>
               <section className="watch-owner-panel">
-                <button className="detail-profile-button" type="button" onClick={onEditProfile}>
-                  {entry.profile.slug === "juntos" ? <Users size={19} /> : <UserRound size={19} />}
-                  <span>{entry.profile.name}</span>
-                  <Pencil size={14} />
-                </button>
+                {isSavedEntry ? (
+                  <button className="detail-profile-button" type="button" onClick={onEditProfile}>
+                    {entry.profile.slug === "juntos" ? <Users size={19} /> : <UserRound size={19} />}
+                    <span>{entry.profile.name}</span>
+                    <Pencil size={14} />
+                  </button>
+                ) : (
+                  <div className="detail-profile-button detail-profile-unassigned">
+                    <Bookmark size={19} />
+                    <span>Sin asignar</span>
+                  </div>
+                )}
                 <div className="watch-owner-copy">
                   <span>{isSavedEntry ? statusLabel[entry.status] : "Sin guardar"}</span>
-                  {entry.status !== "wishlist" && <strong>{episodeLabel(entry)}</strong>}
+                  {isSavedEntry && !isMovie && entry.status !== "wishlist" && <strong>{episodeLabel(entry)}</strong>}
                 </div>
               </section>
               <div className="detail-action-row">
@@ -2676,14 +2699,14 @@ function SeriesDetail({
                       setWishlistPickerOpen(false);
                     }}
                     disabled={entry.status === "watched"}
-                    aria-label="Marcar serie como vista"
+                    aria-label={isMovie ? "Marcar pelicula como vista" : "Marcar serie como vista"}
                     aria-expanded={markConfirmOpen}
                   >
                     <CheckCircle2 size={18} />
                   </button>
                   {markConfirmOpen && (
                     <div className="mini-popover mark-confirm-popover">
-                      <p>Marcar serie como vista?</p>
+                      <p>{isMovie ? "Marcar pelicula como vista?" : "Marcar serie como vista?"}</p>
                       <div className="mini-confirm-actions">
                         <button type="button" onClick={() => setMarkConfirmOpen(false)}>No</button>
                         <button
@@ -2705,7 +2728,7 @@ function SeriesDetail({
         </div>
       </section>
 
-      {!viewingSeason && (
+      {!isMovie && !viewingSeason && (
         <>
           {loadingSeries && <div className="loading-line"><Loader2 className="spin" size={18} /> Cargando temporadas</div>}
 
@@ -2814,7 +2837,7 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAd
     : entry.media.posterPath;
   const poster = posterUrl(preferredPoster ?? null, "w342") ?? posterUrl(entry.media.backdropPath, "w300");
   const StatusIcon = statusIcon[entry.status];
-  const canOpen = Boolean(onOpen && entry.media.mediaType === "tv");
+  const canOpen = Boolean(onOpen);
 
   return (
     <article className={`media-card ${compact ? "compact" : ""} ${canOpen ? "clickable" : ""}`} onClick={canOpen ? onOpen : undefined}>
@@ -2888,7 +2911,7 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAd
 
 function SearchCard({ result, opening = false, onOpen, onSave }: { result: SearchResult; opening?: boolean; onOpen?: () => void; onSave: () => void }) {
   const poster = posterUrl(result.posterPath);
-  const canOpen = result.mediaType === "tv" && Boolean(onOpen);
+  const canOpen = Boolean(onOpen);
 
   return (
     <article
