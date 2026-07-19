@@ -132,6 +132,14 @@ try {
   }
 }
 
+try {
+  db.prepare("ALTER TABLE watch_entries ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0").run();
+} catch (error) {
+  if (!(error instanceof Error) || !error.message.includes("duplicate column name")) {
+    throw error;
+  }
+}
+
 export const nowIso = () => new Date().toISOString();
 
 const upsertUser = (id: string, email: string, displayName: string) => {

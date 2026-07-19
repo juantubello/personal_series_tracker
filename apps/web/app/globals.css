@@ -1587,9 +1587,37 @@ h3 {
   gap: 0.2rem;
 }
 
+.media-meta .status-tag,
+.media-meta .pin-tag {
+  padding: 0.12rem 0.42rem;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.media-meta .status-watching {
+  background: rgba(43, 122, 217, 0.16);
+  color: #1f5fa8;
+}
+
+.media-meta .status-watched {
+  background: rgba(41, 168, 106, 0.18);
+  color: #1f7a4d;
+}
+
+.media-meta .status-wishlist {
+  background: rgba(255, 213, 31, 0.28);
+  color: #6f5900;
+}
+
+.media-meta .pin-tag {
+  background: rgba(20, 24, 30, 0.08);
+  color: #3d4148;
+}
+
 .series-pill {
   display: inline-flex;
   width: fit-content;
+  min-width: 0;
   max-width: 100%;
   align-items: center;
   gap: 0.22rem;
@@ -1709,6 +1737,19 @@ h3 {
   border-radius: 999px;
   background: var(--soft);
   color: #62666e;
+}
+
+.pin-action {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: #9da1a7;
+}
+
+.pin-action.active {
+  background: rgba(255, 213, 31, 0.28);
+  color: #6f5900;
 }
 
 .advance-action span {

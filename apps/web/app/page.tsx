@@ -14,6 +14,7 @@ import {
   ListPlus,
   Loader2,
   Pencil,
+  Pin,
   Plus,
   RefreshCcw,
   Save,
@@ -100,6 +101,7 @@ type Entry = {
   watchedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  pinned?: boolean;
   progress: {
     seasonNumber: number;
     episodeNumber: number;
@@ -1086,6 +1088,16 @@ export default function HomePage() {
     await loadDetailUserEntry(entry);
   };
 
+  // Fija/desfija una serie en Inicio para que muestre su siguiente capitulo
+  // aparte del slot "default" (el mas reciente sin fijar).
+  const togglePin = async (entry: Entry) => {
+    await requestApi(`/media/${entry.media.id}/pin`, {
+      method: "PUT",
+      body: JSON.stringify({ profileSlug: entry.profile.slug, pinned: !entry.pinned })
+    });
+    await Promise.all([loadDashboard(), loadProfileCollections()]);
+  };
+
   // Marca como visto el episodio mostrado (avanza el progreso). Solo marca la
   // serie completa como `watched` cuando ya no queda un proximo episodio.
   const markEntryEpisodeWatched = (entry: Entry, next?: { seasonNumber: number; episodeNumber: number } | null) => {
@@ -1356,6 +1368,15 @@ export default function HomePage() {
   const activePersonalSlug = currentPersonalProfileSlug();
   const personalWatching = dashboard?.watching.filter((entry) => entry.profile.slug === activePersonalSlug) ?? [];
   const sharedWatching = dashboard?.watching.filter((entry) => entry.profile.slug === "juntos") ?? [];
+  // Siguiente capitulo: primero las fijadas (pinned) y luego un unico slot
+  // "default" (la mas reciente que NO este fijada, para no duplicar).
+  const nextChapterList = (list: Entry[]) => {
+    const pinned = list.filter((entry) => entry.pinned);
+    const auto = list.filter((entry) => !entry.pinned).slice(0, 1);
+    return [...pinned, ...auto];
+  };
+  const personalNextChapters = nextChapterList(personalWatching);
+  const sharedNextChapters = nextChapterList(sharedWatching);
   const personalNewEpisodes = dashboard?.newEpisodes.filter((entry) => entry.profile.slug === activePersonalSlug) ?? [];
   const sharedNewEpisodes = dashboard?.newEpisodes.filter((entry) => entry.profile.slug === "juntos") ?? [];
   const activeHomeWishlistListIds = homeWishlistListFilters ?? lists.map((list) => list.id);
@@ -1548,13 +1569,15 @@ export default function HomePage() {
               </section>
 
               <ContentRail title={`Siguiente capitulo ${profileName(activePersonalSlug)}`} empty={`Todavia no hay series en curso para ${profileName(activePersonalSlug)}.`}>
-                {personalWatching.slice(0, 1).map((entry) => (
+                {personalNextChapters.map((entry) => (
                   <EntryCard
                     key={entry.entryId}
                     entry={entry}
                     emphasizeNext
+                    pinned={entry.pinned}
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
+                    onTogglePin={() => togglePin(entry)}
                     onAdvance={() => updateEntry(entry, {
                       status: "watching",
                       seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
@@ -1566,13 +1589,15 @@ export default function HomePage() {
               </ContentRail>
 
               <ContentRail title="Siguiente capitulo Juntos" empty="Todavia no hay series en curso para ver juntos.">
-                {sharedWatching.slice(0, 1).map((entry) => (
+                {sharedNextChapters.map((entry) => (
                   <EntryCard
                     key={entry.entryId}
                     entry={entry}
                     emphasizeNext
+                    pinned={entry.pinned}
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
+                    onTogglePin={() => togglePin(entry)}
                     onAdvance={() => updateEntry(entry, {
                       status: "watching",
                       seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
@@ -1876,8 +1901,10 @@ export default function HomePage() {
                 key={entry.entryId}
                 entry={entry}
                 compact
+                pinned={entry.pinned}
                 onOpen={() => openEntryDetail(entry)}
                 onEditProfile={() => openEntryProfileEditor(entry)}
+                onTogglePin={entry.status === "watching" && entry.media.mediaType === "tv" ? () => togglePin(entry) : undefined}
                 onRating={(rating) => updateEntry(entry, { rating })}
                 onRemove={() => deleteEntry(entry)}
               />
@@ -2910,16 +2937,18 @@ function SeriesDetail({
   );
 }
 
-function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAdvance, onMarkWatched, onRating, onRemove, onEditProfile }: {
+function EntryCard({ entry, compact = false, emphasizeNext = false, pinned = false, onOpen, onAdvance, onMarkWatched, onRating, onRemove, onEditProfile, onTogglePin }: {
   entry: Entry;
   compact?: boolean;
   emphasizeNext?: boolean;
+  pinned?: boolean;
   onOpen?: () => void;
   onAdvance?: () => void;
   onMarkWatched?: () => void;
   onRating?: (rating: number | null) => void;
   onRemove?: () => void;
   onEditProfile?: () => void;
+  onTogglePin?: () => void;
 }) {
   const preferredPoster = entry.media.mediaType === "tv"
     ? entry.episodeInfo?.seasonPosterPath ?? entry.media.posterPath
@@ -2935,8 +2964,9 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAd
       </div>
       <div className="media-body">
         <div className="media-meta">
-          <span><StatusIcon size={14} /> {statusLabel[entry.status]}</span>
+          <span className={`status-tag status-${entry.status}`}><StatusIcon size={13} /> {statusLabel[entry.status]}</span>
           <span>{entry.profile.name}</span>
+          {pinned && <span className="pin-tag"><Pin size={12} /> Fijada</span>}
         </div>
         <div className="series-pill"><span className="series-pill-title">{entry.media.title}</span><span className="series-pill-chevron">›</span></div>
         <h3>{entry.media.mediaType === "tv"
@@ -2974,6 +3004,14 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAd
               onMarkWatched();
             }} aria-label="Marcar como vista">
               <CheckCircle2 size={15} />
+            </button>
+          )}
+          {onTogglePin && (
+            <button className={`pin-action ${pinned ? "active" : ""}`} type="button" onClick={(event) => {
+              event.stopPropagation();
+              onTogglePin();
+            }} aria-label={pinned ? "Quitar de fijadas" : "Fijar en Inicio"}>
+              <Pin size={15} />
             </button>
           )}
           {onRemove && (

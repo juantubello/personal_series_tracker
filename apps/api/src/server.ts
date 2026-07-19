@@ -26,6 +26,7 @@ type EntryRow = {
   watchedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  pinned?: number | null;
   seasonNumber: number | null;
   episodeNumber: number | null;
   episodeTitle: string | null;
@@ -204,6 +205,7 @@ const entryToPayload = (row: EntryRow) => ({
   watchedAt: row.watchedAt,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
+  pinned: Boolean(row.pinned),
   progress: row.mediaType === "tv" ? {
     seasonNumber: row.seasonNumber ?? 0,
     episodeNumber: row.episodeNumber ?? 0,
@@ -226,6 +228,7 @@ const selectEntries = (profileSlugs: ProfileSlug[], statuses?: WatchStatus[]) =>
       we.watched_at AS watchedAt,
       we.created_at AS createdAt,
       we.updated_at AS updatedAt,
+      we.pinned AS pinned,
       sp.season_number AS seasonNumber,
       sp.episode_number AS episodeNumber,
       sp.episode_title AS episodeTitle,
@@ -265,6 +268,7 @@ const selectEntryByMediaAndProfile = (mediaId: string, profileSlug: ProfileSlug)
       we.watched_at AS watchedAt,
       we.created_at AS createdAt,
       we.updated_at AS updatedAt,
+      we.pinned AS pinned,
       sp.season_number AS seasonNumber,
       sp.episode_number AS episodeNumber,
       sp.episode_title AS episodeTitle,
@@ -1141,6 +1145,25 @@ app.get("/media/:id/movie", async (request, reply) => {
   }
 });
 
+app.put("/media/:id/pin", async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const body = request.body as { profileSlug?: ProfileSlug; pinned?: boolean };
+  const profileSlug = body.profileSlug ?? request.currentUser.profileSlug;
+
+  const result = db.prepare(`
+    UPDATE watch_entries
+    SET pinned = ?
+    WHERE media_item_id = ?
+      AND profile_id = (SELECT id FROM profiles WHERE slug = ?)
+  `).run(body.pinned ? 1 : 0, id, profileSlug);
+
+  if (result.changes === 0) {
+    return reply.status(404).send({ error: "Entrada no encontrada para ese perfil" });
+  }
+
+  return { ok: true, pinned: Boolean(body.pinned) };
+});
+
 app.get("/media/:id/season", async (request, reply) => {
   const { id } = request.params as { id: string };
   const query = request.query as { profileSlug?: ProfileSlug; seasonNumber?: string };
@@ -1359,6 +1382,7 @@ app.get("/lists/:id", async (request, reply) => {
       we.watched_at AS watchedAt,
       we.created_at AS createdAt,
       we.updated_at AS updatedAt,
+      we.pinned AS pinned,
       sp.season_number AS seasonNumber,
       sp.episode_number AS episodeNumber,
       sp.episode_title AS episodeTitle,
