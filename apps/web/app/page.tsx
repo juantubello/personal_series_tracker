@@ -627,7 +627,7 @@ export default function HomePage() {
     }
   };
 
-  const loadSeriesOverview = async (entry: Entry) => {
+  const loadSeriesOverview = async (entry: Entry, options?: { preserveSeason?: boolean }) => {
     const requestKey = detailEntryKey(entry);
     setLoadingSeries(true);
     setSeriesError(null);
@@ -637,7 +637,11 @@ export default function HomePage() {
       if (detailRequestKeyRef.current !== requestKey) return;
       setSeriesOverview(data);
       setDetailEntry(data.entry);
-      setDetailSeason(initialSeasonForProgress(data.progress, data.seasons));
+      // Al refrescar (marcar un episodio, avanzar) no reseteamos la temporada
+      // seleccionada: evita el salto de temporada y la pelea con loadSeasonDetail.
+      if (!options?.preserveSeason) {
+        setDetailSeason(initialSeasonForProgress(data.progress, data.seasons));
+      }
     } catch (loadError) {
       if (detailRequestKeyRef.current !== requestKey) return;
       setSeriesOverview(null);
@@ -1036,7 +1040,7 @@ export default function HomePage() {
     });
     await Promise.all([loadDashboard(), loadProfileCollections()]);
     if (detailEntry?.media.id === entry.media.id && detailEntry.profile.slug === entry.profile.slug) {
-      await loadSeriesOverview(entry);
+      await loadSeriesOverview(entry, { preserveSeason: true });
       if (viewingSeason) {
         await loadSeasonDetail(entry, detailSeason);
       }
@@ -1220,7 +1224,7 @@ export default function HomePage() {
       await Promise.all([
         loadDashboard(),
         loadProfileCollections(),
-        loadSeriesOverview(detailEntry),
+        loadSeriesOverview(detailEntry, { preserveSeason: true }),
         loadSeasonDetail(detailEntry, episode.seasonNumber),
         loadDetailUserEntry(detailEntry)
       ]);
@@ -1506,6 +1510,7 @@ export default function HomePage() {
                   <EntryCard
                     key={entry.entryId}
                     entry={entry}
+                    emphasizeNext
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
                     onAdvance={() => updateEntry(entry, {
@@ -1523,6 +1528,7 @@ export default function HomePage() {
                   <EntryCard
                     key={entry.entryId}
                     entry={entry}
+                    emphasizeNext
                     onOpen={() => openEntryDetail(entry)}
                     onEditProfile={() => openEntryProfileEditor(entry)}
                     onAdvance={() => updateEntry(entry, {
@@ -2766,9 +2772,10 @@ function SeriesDetail({
   );
 }
 
-function EntryCard({ entry, compact = false, onOpen, onAdvance, onMarkWatched, onRating, onRemove, onEditProfile }: {
+function EntryCard({ entry, compact = false, emphasizeNext = false, onOpen, onAdvance, onMarkWatched, onRating, onRemove, onEditProfile }: {
   entry: Entry;
   compact?: boolean;
+  emphasizeNext?: boolean;
   onOpen?: () => void;
   onAdvance?: () => void;
   onMarkWatched?: () => void;
@@ -2794,7 +2801,11 @@ function EntryCard({ entry, compact = false, onOpen, onAdvance, onMarkWatched, o
           <span>{entry.profile.name}</span>
         </div>
         <div className="series-pill"><span className="series-pill-title">{entry.media.title}</span><span className="series-pill-chevron">›</span></div>
-        <h3>{entry.media.mediaType === "tv" ? episodeLabel(entry) : yearForMedia(entry.media)}</h3>
+        <h3>{entry.media.mediaType === "tv"
+          ? (emphasizeNext && entry.episodeInfo?.nextEpisode
+              ? `T${entry.episodeInfo.nextEpisode.seasonNumber} E${entry.episodeInfo.nextEpisode.episodeNumber}`
+              : episodeLabel(entry))
+          : yearForMedia(entry.media)}</h3>
         <p className="entry-card-context">
           {mediaLabel(entry.media.mediaType)} · {yearForMedia(entry.media)}
           {entry.rating ? ` · ${entry.rating} estrellas` : ""}
@@ -2802,8 +2813,9 @@ function EntryCard({ entry, compact = false, onOpen, onAdvance, onMarkWatched, o
         </p>
         {entry.episodeInfo?.nextEpisode && (
           <p className="next-episode">
-            Sigue T{entry.episodeInfo.nextEpisode.seasonNumber} E{entry.episodeInfo.nextEpisode.episodeNumber}
-            {entry.episodeInfo.nextEpisode.title ? ` · ${entry.episodeInfo.nextEpisode.title}` : ""}
+            {emphasizeNext
+              ? (entry.episodeInfo.nextEpisode.title ?? "Proximo episodio")
+              : `Sigue T${entry.episodeInfo.nextEpisode.seasonNumber} E${entry.episodeInfo.nextEpisode.episodeNumber}${entry.episodeInfo.nextEpisode.title ? ` · ${entry.episodeInfo.nextEpisode.title}` : ""}`}
           </p>
         )}
         {entry.episodeInfo?.hasNewEpisode && <span className="new-badge">Nuevo disponible</span>}
