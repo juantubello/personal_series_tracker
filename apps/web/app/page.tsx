@@ -619,7 +619,9 @@ export default function HomePage() {
       return null;
     }
 
-    const data = await requestApi<{ items: Entry[] }>(`/media?profiles=${currentPersonalProfileSlug()}`);
+    // Miramos el estado para el perfil con el que se abrio el detalle (juntos/
+    // juan/cami), no siempre el personal, asi el bookmark refleja lo guardado.
+    const data = await requestApi<{ items: Entry[] }>(`/media?profiles=${entry.profile.slug}`);
     const existing = data.items.find((item) => item.media.id === entry.media.id) ?? null;
     setDetailUserEntry(existing);
     return existing;
@@ -1297,8 +1299,8 @@ export default function HomePage() {
   const removeDetailFromCurrentWishlist = async () => {
     if (!detailEntry) return;
 
-    const targetProfileSlug = currentPersonalProfileSlug();
-    const targetProfileName = profileName(targetProfileSlug);
+    const targetProfileSlug = detailEntry.profile.slug;
+    const targetProfileName = detailEntry.profile.name;
     const existing = await loadDetailUserEntry(detailEntry);
 
     if (!existing || existing.status !== "wishlist") {
@@ -1310,7 +1312,7 @@ export default function HomePage() {
     await requestApi(`/media/${detailEntry.media.id}/entry?${params.toString()}`, { method: "DELETE" });
     setDetailUserEntry(null);
     showNotice(`Quitada de Quiero ver ${targetProfileName}`);
-    await Promise.all([loadDashboard(), loadProfileCollections(), loadSeriesOverview(detailEntry)]);
+    await Promise.all([loadDashboard(), loadProfileCollections(), loadDetailUserEntry(detailEntry)]);
   };
 
   useEffect(() => {
@@ -1516,7 +1518,7 @@ export default function HomePage() {
           onEditProfile={() => openEntryProfileEditor(detailEntry)}
           onRating={(rating) => updateEntry(detailEntry, { rating })}
           onMarkWatched={() => updateEntry(detailEntry, { status: "watched" })}
-          wishlistProfileName={profileName(currentPersonalProfileSlug())}
+          wishlistProfileName={detailEntry.profile.name}
           wishlistProfiles={profileOrder.map((slug) => ({ slug, name: profileName(slug) }))}
           wishlistEntryStatus={detailUserEntry?.status ?? null}
         />
@@ -1662,7 +1664,7 @@ export default function HomePage() {
             <Search size={20} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar serie o pelicula" />
             <button type="submit" aria-label="Buscar">
-              {searching ? <Loader2 className="spin" size={18} /> : <Plus size={18} />}
+              {searching ? <Loader2 className="spin" size={18} /> : <Search size={18} />}
             </button>
           </form>
 
@@ -3145,7 +3147,7 @@ function MediaSaveDialog({
                 </label>
               </div>
             )}
-            <StarInput value={saveRating} onChange={onRatingChange} />
+            {saveStatus === "watched" && <StarInput value={saveRating} onChange={onRatingChange} />}
           </div>
         </div>
 
