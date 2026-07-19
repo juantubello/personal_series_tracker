@@ -23,6 +23,131 @@ La app no busca ser un clon completo de Letterboxd/Trakt. El foco inicial es:
 - La autenticacion la resuelve Cloudflare Zero Trust; la app solo usa la identidad recibida para elegir defaults y auditoria liviana.
 - Todo lo que sea compartido debe ser visible para Juan y Camila. No hay privacidad fuerte en v1, solo organizacion por perfiles/listas.
 
+## Guia Rapida Para Agentes
+
+Esta seccion existe para que otro agente, por ejemplo Claude Code, pueda continuar sin reconstruir todo el contexto.
+
+### Stack Y Estructura
+
+- Monorepo npm workspaces.
+- Frontend: `apps/web`, Next.js App Router + React + TypeScript.
+- Backend: `apps/api`, Fastify + TypeScript.
+- DB: SQLite usando `node:sqlite` de Node 25.
+- Proxy/deploy: Docker Compose + Nginx + Cloudflare Tunnel del host.
+- Catalogo externo: TMDB; la API key/token vive solo en backend.
+
+### Comandos Locales
+
+Instalar:
+
+```bash
+npm install
+```
+
+Desarrollo sin Docker:
+
+```bash
+npm run dev
+```
+
+Validar todo:
+
+```bash
+npm run typecheck
+```
+
+Validar por workspace:
+
+```bash
+npm run typecheck -w @pipiseries/api
+npm run typecheck -w @pipiseries/web
+```
+
+Build frontend:
+
+```bash
+npm run build -w @pipiseries/web
+```
+
+Docker local/desarrollo:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+Docker produccion/servidor:
+
+```bash
+docker compose up -d --build
+```
+
+Healthchecks:
+
+```bash
+curl http://127.0.0.1:3015/api/health
+docker compose ps
+```
+
+Backup desde servidor:
+
+```bash
+npm run backup:docker
+```
+
+### Archivos Clave
+
+- `apps/web/app/page.tsx`: casi toda la UI y flujo principal.
+- `apps/web/app/globals.css`: estilos globales mobile-first/PWA.
+- `apps/api/src/server.ts`: rutas Fastify y logica de dominio.
+- `apps/api/src/db.ts`: esquema SQLite, seeds, helpers de DB.
+- `apps/api/src/tmdb.ts`: cliente/cache de TMDB.
+- `apps/api/src/auth.ts`: validacion Cloudflare Access/dev auth.
+- `deploy/nginx/default.conf`: proxy `/api` al backend y resto al frontend.
+- `docker-compose.yml`: stack productivo.
+- `docker-compose.local.yml`: overrides locales con dev auth.
+- `docs/deploy-linux-cloudflare.md`: guia de deploy.
+- `scripts/backup-sqlite.sh`: backup SQLite via Docker.
+
+### Reglas De Trabajo
+
+- No commitear `.env`, `data/`, `backups/`, DB real ni tokens reales.
+- Antes de commitear, revisar `git diff` y buscar secretos.
+- Si se toca backend, correr typecheck de API y avisar que local dev necesita reiniciar backend.
+- Si se cambia contrato API/frontend, correr typecheck de API y web.
+- Si se cambian `NEXT_PUBLIC_*`, hacer rebuild del frontend.
+- Si se toca deploy, explicar si requiere `docker compose up -d --build` o restart de `cloudflared`.
+- No tocar configs de otras apps del homelab salvo pedido explicito.
+- Mantener UI en espanol, mobile-first y con look PWA/iOS.
+
+### Deploy Actual En Servidor
+
+El servidor usa:
+
+```bash
+cd ~/personal_series_tracker
+git pull
+docker compose up -d --build
+```
+
+La app queda en:
+
+```text
+https://pipiseries.casapipis.net
+```
+
+El Nginx del compose escucha solo en:
+
+```text
+127.0.0.1:3015
+```
+
+Cloudflared del host enruta:
+
+```yaml
+- hostname: pipiseries.casapipis.net
+  service: http://localhost:3015
+```
+
 ## Estado Real Actual Del Deploy
 
 Notas actualizadas de la sesion de deploy del 2026-07-19:
