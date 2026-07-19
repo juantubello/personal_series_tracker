@@ -3020,9 +3020,10 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, pinned = fal
   const poster = posterUrl(preferredPoster ?? null, "w342") ?? posterUrl(entry.media.backdropPath, "w300");
   const StatusIcon = statusIcon[entry.status];
   const canOpen = Boolean(onOpen);
+  const actionCount = [entry.media.mediaType === "tv" && onAdvance, onMarkWatched, onTogglePin, onRemove, onEditProfile].filter(Boolean).length;
 
   return (
-    <article className={`media-card ${compact ? "compact" : ""} ${canOpen ? "clickable" : ""}`} onClick={canOpen ? onOpen : undefined}>
+    <article className={`media-card ${compact ? "compact" : ""} ${actionCount >= 4 ? "many-actions" : ""} ${canOpen ? "clickable" : ""}`} onClick={canOpen ? onOpen : undefined}>
       <div className="poster">
         {poster ? <img src={poster} alt="" /> : entry.media.mediaType === "tv" ? <Tv size={28} /> : <Film size={28} />}
       </div>

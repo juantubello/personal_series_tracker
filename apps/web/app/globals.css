@@ -492,6 +492,24 @@ h3 {
   grid-template-columns: 4.65rem minmax(0, 1fr);
 }
 
+.media-card.many-actions {
+  min-height: 8.7rem;
+  padding-right: 2.7rem;
+}
+
+.media-card.many-actions .card-actions {
+  gap: 0.24rem;
+}
+
+.media-card.many-actions .check-action,
+.media-card.many-actions .advance-action,
+.media-card.many-actions .delete-action,
+.media-card.many-actions .profile-action,
+.media-card.many-actions .pin-action {
+  width: 1.86rem;
+  height: 1.86rem;
+}
+
 .detail-screen {
   display: grid;
   gap: 0.72rem;
