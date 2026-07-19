@@ -6,6 +6,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clapperboard,
+  Clock,
   Download,
   Film,
   Grid2X2,
@@ -211,6 +212,21 @@ type SeasonEpisode = {
   next: boolean;
 };
 
+type MovieOverview = {
+  entry: Entry;
+  movie: {
+    title: string;
+    year: string | null;
+    overview: string | null;
+    tagline: string | null;
+    runtime: number | null;
+    director: string | null;
+    genres: string[];
+    voteAverage: number | null;
+    releaseDate: string | null;
+  };
+};
+
 type SeriesOverview = {
   entry: Entry;
   series: {
@@ -391,6 +407,8 @@ export default function HomePage() {
   const [detailUserEntry, setDetailUserEntry] = useState<Entry | null>(null);
   const [seriesOverview, setSeriesOverview] = useState<SeriesOverview | null>(null);
   const [loadingSeries, setLoadingSeries] = useState(false);
+  const [movieOverview, setMovieOverview] = useState<MovieOverview | null>(null);
+  const [loadingMovie, setLoadingMovie] = useState(false);
   const [seriesError, setSeriesError] = useState<string | null>(null);
   const [viewingSeason, setViewingSeason] = useState(false);
   const [detailSeason, setDetailSeason] = useState(1);
@@ -667,6 +685,23 @@ export default function HomePage() {
       setSeriesError(message);
     } finally {
       setLoadingSeries(false);
+    }
+  };
+
+  const loadMovieOverview = async (entry: Entry) => {
+    const requestKey = detailEntryKey(entry);
+    setLoadingMovie(true);
+    try {
+      const params = new URLSearchParams({ profileSlug: entry.profile.slug });
+      const data = await requestApi<MovieOverview>(`/media/${entry.media.id}/movie?${params.toString()}`);
+      if (detailRequestKeyRef.current !== requestKey) return;
+      setMovieOverview(data);
+      setDetailEntry(data.entry);
+    } catch {
+      if (detailRequestKeyRef.current !== requestKey) return;
+      setMovieOverview(null);
+    } finally {
+      setLoadingMovie(false);
     }
   };
 
@@ -1134,6 +1169,7 @@ export default function HomePage() {
     setDetailEntry(entry);
     setDetailSeason(initialSeasonForProgress(entry.progress));
     setSeriesOverview(null);
+    setMovieOverview(null);
     setSeasonDetail(null);
     setDetailListMemberships([]);
     setDetailUserEntry(null);
@@ -1284,6 +1320,12 @@ export default function HomePage() {
   }, [detailEntry?.media.id, detailEntry?.profile.slug, detailEntry?.media.mediaType, activeDevEmail]);
 
   useEffect(() => {
+    if (!detailEntry || detailEntry.media.mediaType !== "movie") return;
+
+    void loadMovieOverview(detailEntry);
+  }, [detailEntry?.media.id, detailEntry?.profile.slug, detailEntry?.media.mediaType, activeDevEmail]);
+
+  useEffect(() => {
     if (!detailEntry || !viewingSeason) return;
 
     void loadSeasonDetail(detailEntry, detailSeason);
@@ -1381,6 +1423,7 @@ export default function HomePage() {
     detailRequestKeyRef.current = null;
     setDetailEntry(null);
     setSeriesOverview(null);
+    setMovieOverview(null);
     setSeasonDetail(null);
     setDetailListMemberships([]);
     setViewingSeason(false);
@@ -1440,10 +1483,12 @@ export default function HomePage() {
         <SeriesDetail
           entry={detailEntry}
           overview={seriesOverview}
+          movie={movieOverview?.movie ?? null}
           detail={seasonDetail}
           selectedSeason={detailSeason}
           viewingSeason={viewingSeason}
           loadingSeries={loadingSeries}
+          loadingMovie={loadingMovie}
           loadingSeason={loadingSeason}
           seriesError={seriesError}
           seasonError={seasonError}
@@ -1621,17 +1666,15 @@ export default function HomePage() {
             </button>
           </form>
 
-          <p className="helper search-helper">Al guardar te voy a preguntar quien la ve, y despues tambien lo podes cambiar.</p>
+          <div className="segmented compact-segmented">
+            {([["all", "Todo"], ["tv", "Series"], ["movie", "Peliculas"]] as [ProfileMediaFilter, string][]).map(([value, label]) => (
+              <button key={value} className={searchTypeFilter === value ? "active" : ""} type="button" onClick={() => setSearchTypeFilter(value)}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-          {searchResults.length > 0 && (
-            <div className="segmented compact-segmented">
-              {([["all", "Todo"], ["tv", "Series"], ["movie", "Peliculas"]] as [ProfileMediaFilter, string][]).map(([value, label]) => (
-                <button key={value} className={searchTypeFilter === value ? "active" : ""} type="button" onClick={() => setSearchTypeFilter(value)}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
+          <p className="helper search-helper">Al guardar te voy a preguntar quien la ve, y despues tambien lo podes cambiar.</p>
 
           <div className="result-list poster-grid">
             {searchResults
@@ -2356,10 +2399,12 @@ function HomeWishlistCard({ item, onOpen, onEditProfile, onRemove }: {
 function SeriesDetail({
   entry,
   overview,
+  movie,
   detail,
   selectedSeason,
   viewingSeason,
   loadingSeries,
+  loadingMovie,
   loadingSeason,
   seriesError,
   seasonError,
@@ -2385,10 +2430,12 @@ function SeriesDetail({
 }: {
   entry: Entry;
   overview: SeriesOverview | null;
+  movie: MovieOverview["movie"] | null;
   detail: SeasonDetail | null;
   selectedSeason: number;
   viewingSeason: boolean;
   loadingSeries: boolean;
+  loadingMovie: boolean;
   loadingSeason: boolean;
   seriesError: string | null;
   seasonError: string | null;
@@ -2441,6 +2488,12 @@ function SeriesDetail({
   const isMovie = entry.media.mediaType === "movie";
   const heroYearRaw = series?.year ?? yearForMedia(entry.media);
   const heroYear = heroYearRaw && heroYearRaw !== "Sin fecha" ? heroYearRaw : null;
+  const movieScore = Math.round((movie?.voteAverage ?? entry.media.voteAverage ?? 0) * 10);
+  const movieRuntimeLabel = movie?.runtime
+    ? [Math.floor(movie.runtime / 60) ? `${Math.floor(movie.runtime / 60)}h` : null, movie.runtime % 60 ? `${movie.runtime % 60}m` : null].filter(Boolean).join(" ") || null
+    : null;
+  const vibeBucket = movieScore >= 70 ? 0 : movieScore >= 50 ? 1 : 2;
+  const vibeEmojis = ["🤩", "🙂", "😴"].map((emoji, index) => ({ emoji, active: index === vibeBucket }));
   const metaItems = showingSeasonHero ? (
     <>
       {selectedSeasonInfo?.year && <span>{selectedSeasonInfo.year}</span>}
@@ -2524,7 +2577,7 @@ function SeriesDetail({
               </div>
             </div>
           </div>
-          {description && (
+          {!isMovie && description && (
             <button
               className="description-toggle subtle"
               type="button"
@@ -2727,6 +2780,40 @@ function SeriesDetail({
           )}
         </div>
       </section>
+
+      {isMovie && (
+        <section className="movie-detail-body">
+          {loadingMovie && !movie && <div className="loading-line"><Loader2 className="spin" size={18} /> Cargando pelicula</div>}
+          {movie && (
+            <>
+              {movie.tagline && <p className="movie-tagline">“{movie.tagline}”</p>}
+              <div className="movie-facts">
+                {movieScore > 0 && <span className="movie-score"><Star size={13} /> {movieScore}%</span>}
+                {movieRuntimeLabel && <span><Clock size={13} /> {movieRuntimeLabel}</span>}
+                {movie.year && <span>{movie.year}</span>}
+                {movie.genres.slice(0, 3).map((genre) => <span key={genre}>{genre}</span>)}
+              </div>
+              {movie.director && (
+                <div className="movie-director">
+                  <span>Direccion</span>
+                  <strong>{movie.director}</strong>
+                </div>
+              )}
+              {movie.overview && (
+                <div className="movie-overview">
+                  <h3>Sinopsis</h3>
+                  <p>{movie.overview}</p>
+                </div>
+              )}
+              <div className="movie-vibe" aria-hidden="true">
+                {vibeEmojis.map((item) => (
+                  <span key={item.emoji} className={item.active ? "active" : ""}>{item.emoji}</span>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       {!isMovie && !viewingSeason && (
         <>

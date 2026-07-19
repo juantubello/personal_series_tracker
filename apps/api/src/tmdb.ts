@@ -37,6 +37,11 @@ export type TmdbDetails = TmdbRawResult & {
     results?: Record<string, TmdbProviderResponse>;
   };
   genres?: Array<{ id: number; name: string }>;
+  runtime?: number | null;
+  tagline?: string | null;
+  credits?: {
+    crew?: Array<{ job?: string; name?: string; department?: string }>;
+  };
   last_episode_to_air?: TmdbEpisode | null;
   next_episode_to_air?: TmdbEpisode | null;
   seasons?: Array<{
@@ -343,6 +348,13 @@ export const getRecommendationsForItem = async (mediaType: MediaType, tmdbId: nu
 
 export const getTvDetails = async (tmdbId: number) => {
   return tmdbFetch<TmdbDetails>(`/tv/${tmdbId}`, {
+    language: config.tmdb.language
+  }, cacheTtl.tvDetails);
+};
+
+export const getMovieDetails = async (tmdbId: number) => {
+  return tmdbFetch<TmdbDetails>(`/movie/${tmdbId}`, {
+    append_to_response: "credits",
     language: config.tmdb.language
   }, cacheTtl.tvDetails);
 };

@@ -6,7 +6,7 @@ import { gzipSync } from "node:zlib";
 import { db, defaultProfileSlugsForUser, getProfileBySlug, getProfiles, mapMediaRow, normalizeProfileSlugs, nowIso, seedBaseData } from "./db.js";
 import { config, hasTmdbCredentials } from "./env.js";
 import { isDevAuthEnabled, resolveCurrentUser } from "./auth.js";
-import { getMediaDetails, getRecommendationsForItem, getTvDetails, getTvSeason, searchMedia } from "./tmdb.js";
+import { getMediaDetails, getMovieDetails, getRecommendationsForItem, getTvDetails, getTvSeason, searchMedia } from "./tmdb.js";
 import type { CurrentUser, MediaItem, MediaType, ProfileSlug, TmdbSearchResult, WatchStatus } from "./types.js";
 
 declare module "fastify" {
@@ -1096,6 +1096,48 @@ app.get("/media/:id/series", async (request, reply) => {
   } catch (error) {
     request.log.warn(error);
     return reply.status(502).send({ error: "No se pudo cargar la serie desde TMDB" });
+  }
+});
+
+app.get("/media/:id/movie", async (request, reply) => {
+  const { id } = request.params as { id: string };
+  const query = request.query as { profileSlug?: ProfileSlug };
+  const profileSlug = query.profileSlug ?? request.currentUser.profileSlug;
+  const entry = selectEntryOrPreviewByMediaAndProfile(id, profileSlug);
+
+  if (!entry) {
+    return reply.status(404).send({ error: "Item no encontrado" });
+  }
+
+  if (entry.mediaType !== "movie") {
+    return reply.status(400).send({ error: "El detalle de pelicula solo aplica a peliculas" });
+  }
+
+  if (!hasTmdbCredentials()) {
+    return reply.status(502).send({ error: "Faltan credenciales de TMDB para cargar la pelicula" });
+  }
+
+  try {
+    const details = await getMovieDetails(entry.tmdbId);
+    const director = details.credits?.crew?.find((member) => member.job === "Director")?.name ?? null;
+
+    return {
+      entry: entryToPayload(entry),
+      movie: {
+        title: details.title ?? entry.title,
+        year: details.release_date ? details.release_date.slice(0, 4) : null,
+        overview: details.overview ?? entry.overview,
+        tagline: details.tagline && details.tagline.trim() ? details.tagline : null,
+        runtime: details.runtime ?? null,
+        director,
+        genres: details.genres?.map((genre) => genre.name) ?? [],
+        voteAverage: details.vote_average ?? entry.voteAverage,
+        releaseDate: details.release_date ?? null
+      }
+    };
+  } catch (error) {
+    request.log.warn(error);
+    return reply.status(502).send({ error: "No se pudo cargar la pelicula desde TMDB" });
   }
 });
 
