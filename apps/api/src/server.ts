@@ -35,6 +35,8 @@ type EntryRow = {
   mediaType: MediaType;
   title: string;
   originalTitle: string | null;
+  englishTitle: string | null;
+  englishOverview: string | null;
   overview: string | null;
   posterPath: string | null;
   backdropPath: string | null;
@@ -177,13 +179,15 @@ const statusPriority: Record<WatchStatus, number> = {
   dropped: 1
 };
 
-const mediaToPayload = (row: Pick<EntryRow, "mediaId" | "tmdbId" | "mediaType" | "title" | "originalTitle" | "overview" | "posterPath" | "backdropPath" | "releaseDate" | "firstAirDate" | "voteAverage" | "providersJson">) => ({
+const mediaToPayload = (row: Pick<EntryRow, "mediaId" | "tmdbId" | "mediaType" | "title" | "originalTitle" | "englishTitle" | "overview" | "englishOverview" | "posterPath" | "backdropPath" | "releaseDate" | "firstAirDate" | "voteAverage" | "providersJson">) => ({
   id: row.mediaId,
   tmdbId: row.tmdbId,
   mediaType: row.mediaType,
   title: row.title,
   originalTitle: row.originalTitle,
+  englishTitle: row.englishTitle,
   overview: row.overview,
+  englishOverview: row.englishOverview,
   posterPath: row.posterPath,
   backdropPath: row.backdropPath,
   releaseDate: row.releaseDate,
@@ -237,6 +241,8 @@ const selectEntries = (profileSlugs: ProfileSlug[], statuses?: WatchStatus[]) =>
       mi.media_type AS mediaType,
       mi.title,
       mi.original_title AS originalTitle,
+      mi.english_title AS englishTitle,
+      mi.english_overview AS englishOverview,
       mi.overview,
       mi.poster_path AS posterPath,
       mi.backdrop_path AS backdropPath,
@@ -277,6 +283,8 @@ const selectEntryByMediaAndProfile = (mediaId: string, profileSlug: ProfileSlug)
       mi.media_type AS mediaType,
       mi.title,
       mi.original_title AS originalTitle,
+      mi.english_title AS englishTitle,
+      mi.english_overview AS englishOverview,
       mi.overview,
       mi.poster_path AS posterPath,
       mi.backdrop_path AS backdropPath,
@@ -321,6 +329,8 @@ const previewEntryRowForMedia = (media: MediaItem, profileSlug: ProfileSlug): En
     mediaType: media.mediaType,
     title: media.title,
     originalTitle: media.originalTitle,
+    englishTitle: media.englishTitle,
+    englishOverview: media.englishOverview,
     overview: media.overview,
     posterPath: media.posterPath,
     backdropPath: media.backdropPath,
@@ -588,14 +598,16 @@ const upsertMedia = (details: Awaited<ReturnType<typeof getMediaDetails>>) => {
 
   db.prepare(`
     INSERT INTO media_items (
-      id, tmdb_id, media_type, title, original_title, overview, poster_path, backdrop_path,
+      id, tmdb_id, media_type, title, original_title, english_title, overview, english_overview, poster_path, backdrop_path,
       release_date, first_air_date, vote_average, tmdb_json, providers_json, created_at, updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(tmdb_id, media_type) DO UPDATE SET
       title = excluded.title,
       original_title = excluded.original_title,
+      english_title = excluded.english_title,
       overview = excluded.overview,
+      english_overview = excluded.english_overview,
       poster_path = excluded.poster_path,
       backdrop_path = excluded.backdrop_path,
       release_date = excluded.release_date,
@@ -610,7 +622,9 @@ const upsertMedia = (details: Awaited<ReturnType<typeof getMediaDetails>>) => {
     details.mediaType,
     details.title,
     details.originalTitle,
+    details.englishTitle,
     details.overview,
+    details.englishOverview,
     details.posterPath,
     details.backdropPath,
     details.releaseDate,
@@ -796,6 +810,8 @@ app.get("/export", async (request, reply) => {
             media_type AS mediaType,
             title,
             original_title AS originalTitle,
+            english_title AS englishTitle,
+            english_overview AS englishOverview,
             overview,
             poster_path AS posterPath,
             backdrop_path AS backdropPath,
@@ -1103,6 +1119,34 @@ app.get("/media/:id/series", async (request, reply) => {
   }
 });
 
+app.post("/media/sync-titles", async (request, reply) => {
+  if (!hasTmdbCredentials()) {
+    return reply.status(502).send({ error: "Faltan credenciales de TMDB" });
+  }
+
+  const rows = db.prepare(`
+    SELECT id, tmdb_id AS tmdbId, media_type AS mediaType
+    FROM media_items
+    WHERE english_title IS NULL OR english_title = ''
+  `).all() as Array<{ id: string; tmdbId: number; mediaType: MediaType }>;
+
+  let updated = 0;
+  for (const row of rows) {
+    try {
+      const details = await getMediaDetails(row.mediaType, row.tmdbId);
+      if (details.englishTitle || details.englishOverview) {
+        db.prepare("UPDATE media_items SET english_title = ?, english_overview = ? WHERE id = ?")
+          .run(details.englishTitle, details.englishOverview, row.id);
+        updated += 1;
+      }
+    } catch (error) {
+      request.log.warn(error);
+    }
+  }
+
+  return { updated, total: rows.length };
+});
+
 app.get("/media/:id/movie", async (request, reply) => {
   const { id } = request.params as { id: string };
   const query = request.query as { profileSlug?: ProfileSlug };
@@ -1391,6 +1435,8 @@ app.get("/lists/:id", async (request, reply) => {
       mi.media_type AS mediaType,
       mi.title,
       mi.original_title AS originalTitle,
+      mi.english_title AS englishTitle,
+      mi.english_overview AS englishOverview,
       mi.overview,
       mi.poster_path AS posterPath,
       mi.backdrop_path AS backdropPath,

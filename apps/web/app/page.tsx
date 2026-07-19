@@ -76,7 +76,10 @@ type Media = {
   tmdbId: number;
   mediaType: MediaType;
   title: string;
+  originalTitle?: string | null;
+  englishTitle?: string | null;
   overview: string | null;
+  englishOverview?: string | null;
   posterPath: string | null;
   backdropPath: string | null;
   releaseDate: string | null;
@@ -429,6 +432,7 @@ export default function HomePage() {
   const [profileSort, setProfileSort] = useState<ProfileSort>("updated_desc");
   const [exportingData, setExportingData] = useState(false);
   const [backingUpData, setBackingUpData] = useState(false);
+  const [syncingTitles, setSyncingTitles] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -538,6 +542,20 @@ export default function HomePage() {
       setError(backupError instanceof Error ? backupError.message : "No se pudo generar el backup");
     } finally {
       setBackingUpData(false);
+    }
+  };
+
+  const syncEnglishTitles = async () => {
+    setSyncingTitles(true);
+    setError(null);
+    try {
+      const data = await requestApi<{ updated: number; total: number }>("/media/sync-titles", { method: "POST" });
+      await Promise.all([loadDashboard(), loadProfileCollections()]);
+      showNotice(data.total === 0 ? "Todo ya estaba sincronizado" : `Titulos EN sincronizados: ${data.updated}/${data.total}`);
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : "No se pudo sincronizar");
+    } finally {
+      setSyncingTitles(false);
     }
   };
 
@@ -1439,7 +1457,10 @@ export default function HomePage() {
 
     const matchesSearch = !profileSearchTerm || [
       entry.media.title,
+      entry.media.englishTitle ?? "",
+      entry.media.originalTitle ?? "",
       entry.media.overview ?? "",
+      entry.media.englishOverview ?? "",
       entry.profile.name
     ].some((value) => value.toLowerCase().includes(profileSearchTerm));
     const matchesStatus = profileStatusFilters.includes(entry.status);
@@ -2016,9 +2037,11 @@ export default function HomePage() {
         <SettingsDialog
           exporting={exportingData}
           backingUp={backingUpData}
+          syncing={syncingTitles}
           onClose={() => setProfileSettingsOpen(false)}
           onExport={exportDataJson}
           onBackup={backupDataArchive}
+          onSyncTitles={syncEnglishTitles}
         />
       )}
     </main>
@@ -3020,6 +3043,9 @@ function EntryCard({ entry, compact = false, emphasizeNext = false, pinned = fal
           {entry.rating ? ` · ${entry.rating} estrellas` : ""}
           {entry.createdAt ? ` · Agregada ${formatDateAr(entry.createdAt)}` : ""}
         </p>
+        {entry.media.englishTitle && entry.media.englishTitle.toLowerCase() !== entry.media.title.toLowerCase() && (
+          <span className="alt-title">{entry.media.englishTitle}</span>
+        )}
         {entry.episodeInfo?.nextEpisode && (
           <p className="next-episode">
             {emphasizeNext
@@ -3279,13 +3305,16 @@ function ConfirmDialog({ eyebrow, title, text, confirmLabel, danger = false, bus
   );
 }
 
-function SettingsDialog({ exporting, backingUp, onClose, onExport, onBackup }: {
+function SettingsDialog({ exporting, backingUp, syncing, onClose, onExport, onBackup, onSyncTitles }: {
   exporting: boolean;
   backingUp: boolean;
+  syncing: boolean;
   onClose: () => void;
   onExport: () => void;
   onBackup: () => void;
+  onSyncTitles: () => void;
 }) {
+  const busy = exporting || backingUp || syncing;
   return (
     <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label="Ajustes">
       <section className="dialog-panel settings-panel">
@@ -3294,20 +3323,27 @@ function SettingsDialog({ exporting, backingUp, onClose, onExport, onBackup }: {
             <p className="eyebrow">Configuracion</p>
             <h2 className="dialog-title">Datos y backups</h2>
           </div>
-          <button className="dialog-close" type="button" onClick={onClose} aria-label="Cerrar" disabled={exporting || backingUp}>
+          <button className="dialog-close" type="button" onClick={onClose} aria-label="Cerrar" disabled={busy}>
             <X size={18} />
           </button>
         </div>
 
         <div className="settings-action-list">
-          <button className="settings-action" type="button" onClick={onExport} disabled={exporting || backingUp}>
+          <button className="settings-action" type="button" onClick={onSyncTitles} disabled={busy}>
+            {syncing ? <Loader2 className="spin" size={18} /> : <RefreshCcw size={18} />}
+            <span>
+              <strong>Sincronizar titulos EN</strong>
+              <small>Trae titulo y descripcion en ingles de TMDB para lo ya guardado.</small>
+            </span>
+          </button>
+          <button className="settings-action" type="button" onClick={onExport} disabled={busy}>
             {exporting ? <Loader2 className="spin" size={18} /> : <Download size={18} />}
             <span>
               <strong>Exportar JSON</strong>
               <small>Datos legibles para revisar o migrar.</small>
             </span>
           </button>
-          <button className="settings-action" type="button" onClick={onBackup} disabled={exporting || backingUp}>
+          <button className="settings-action" type="button" onClick={onBackup} disabled={busy}>
             {backingUp ? <Loader2 className="spin" size={18} /> : <Save size={18} />}
             <span>
               <strong>Backup DB</strong>

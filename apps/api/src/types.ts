@@ -23,6 +23,8 @@ export type MediaItem = {
   mediaType: MediaType;
   title: string;
   originalTitle: string | null;
+  englishTitle: string | null;
+  englishOverview: string | null;
   overview: string | null;
   posterPath: string | null;
   backdropPath: string | null;

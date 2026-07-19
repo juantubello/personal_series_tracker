@@ -42,6 +42,9 @@ export type TmdbDetails = TmdbRawResult & {
   credits?: {
     crew?: Array<{ job?: string; name?: string; department?: string }>;
   };
+  translations?: {
+    translations?: Array<{ iso_639_1?: string; data?: { title?: string; name?: string; overview?: string } }>;
+  };
   last_episode_to_air?: TmdbEpisode | null;
   next_episode_to_air?: TmdbEpisode | null;
   seasons?: Array<{
@@ -307,7 +310,7 @@ const normalizeProviders = (details: TmdbDetails): { providers: WatchProvider[];
 export const getMediaDetails = async (mediaType: MediaType, tmdbId: number) => {
   const namespace = mediaType === "movie" ? "movie" : "tv";
   const details = await tmdbFetch<TmdbDetails>(`/${namespace}/${tmdbId}`, {
-    append_to_response: "watch/providers",
+    append_to_response: "watch/providers,translations",
     language: config.tmdb.language
   }, cacheTtl.details);
 
@@ -318,10 +321,16 @@ export const getMediaDetails = async (mediaType: MediaType, tmdbId: number) => {
     throw new Error("TMDB response did not include a title");
   }
 
+  const enTranslation = details.translations?.translations?.find((entry) => entry.iso_639_1 === "en")?.data;
+  const englishTitle = (enTranslation?.title || enTranslation?.name || null)?.trim() || null;
+  const englishOverview = enTranslation?.overview?.trim() || null;
+
   return {
     tmdbId,
     mediaType,
     title,
+    englishTitle,
+    englishOverview,
     originalTitle: mediaType === "movie" ? details.original_title ?? null : details.original_name ?? null,
     overview: details.overview ?? null,
     posterPath: details.poster_path ?? null,

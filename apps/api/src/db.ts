@@ -140,6 +140,16 @@ try {
   }
 }
 
+for (const column of ["english_title", "english_overview"]) {
+  try {
+    db.prepare(`ALTER TABLE media_items ADD COLUMN ${column} TEXT`).run();
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes("duplicate column name")) {
+      throw error;
+    }
+  }
+}
+
 export const nowIso = () => new Date().toISOString();
 
 const upsertUser = (id: string, email: string, displayName: string) => {
@@ -240,6 +250,8 @@ export const mapMediaRow = (row: Record<string, unknown>): MediaItem => ({
   mediaType: row.media_type as MediaItem["mediaType"],
   title: String(row.title),
   originalTitle: row.original_title ? String(row.original_title) : null,
+  englishTitle: row.english_title ? String(row.english_title) : null,
+  englishOverview: row.english_overview ? String(row.english_overview) : null,
   overview: row.overview ? String(row.overview) : null,
   posterPath: row.poster_path ? String(row.poster_path) : null,
   backdropPath: row.backdrop_path ? String(row.backdrop_path) : null,
