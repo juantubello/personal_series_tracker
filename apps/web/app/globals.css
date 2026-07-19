@@ -73,6 +73,10 @@ p {
   margin: 0 auto;
   padding: 0 0.72rem calc(5.25rem + env(safe-area-inset-bottom));
   background: var(--app);
+  /* Evita que un titulo/tarjeta ancho vuelva scrolleable toda la pagina
+     (y con eso rompa el position: fixed del nav en iOS). clip no crea un
+     scroll container, asi que no afecta al topbar sticky. */
+  overflow-x: clip;
 }
 
 .topbar {
@@ -1475,12 +1479,19 @@ h3 {
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.1;
-  text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
-.series-pill span {
+.series-pill-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-pill-chevron {
+  flex-shrink: 0;
   color: var(--muted);
 }
 

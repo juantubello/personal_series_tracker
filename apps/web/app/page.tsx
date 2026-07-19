@@ -1044,6 +1044,15 @@ export default function HomePage() {
     await loadDetailUserEntry(entry);
   };
 
+  // Marca como visto el episodio mostrado (avanza el progreso). Solo marca la
+  // serie completa como `watched` cuando ya no queda un proximo episodio.
+  const markEntryEpisodeWatched = (entry: Entry, next?: { seasonNumber: number; episodeNumber: number } | null) => {
+    if (next) {
+      return updateEntry(entry, { status: "watching", seasonNumber: next.seasonNumber, episodeNumber: next.episodeNumber });
+    }
+    return updateEntry(entry, { status: "watched" });
+  };
+
   const deleteEntry = async (entry: Entry) => {
     const params = new URLSearchParams({ profileSlug: entry.profile.slug });
     await requestApi(`/media/${entry.media.id}/entry?${params.toString()}`, { method: "DELETE" });
@@ -1504,7 +1513,7 @@ export default function HomePage() {
                       seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
                       episodeNumber: entry.episodeInfo?.nextEpisode?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
                     })}
-                    onMarkWatched={() => updateEntry(entry, { status: "watched" })}
+                    onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.nextEpisode)}
                   />
                 ))}
               </ContentRail>
@@ -1521,7 +1530,7 @@ export default function HomePage() {
                       seasonNumber: entry.episodeInfo?.nextEpisode?.seasonNumber ?? initialSeasonForProgress(entry.progress),
                       episodeNumber: entry.episodeInfo?.nextEpisode?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
                     })}
-                    onMarkWatched={() => updateEntry(entry, { status: "watched" })}
+                    onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.nextEpisode)}
                   />
                 ))}
               </ContentRail>
@@ -1539,7 +1548,7 @@ export default function HomePage() {
                       seasonNumber: entry.episodeInfo?.lastEpisodeToAir?.seasonNumber ?? entry.progress?.seasonNumber ?? 1,
                       episodeNumber: entry.episodeInfo?.lastEpisodeToAir?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
                     })}
-                    onMarkWatched={() => updateEntry(entry, { status: "watched" })}
+                    onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.lastEpisodeToAir)}
                   />
                 ))}
               </ContentRail>
@@ -1557,7 +1566,7 @@ export default function HomePage() {
                       seasonNumber: entry.episodeInfo?.lastEpisodeToAir?.seasonNumber ?? entry.progress?.seasonNumber ?? 1,
                       episodeNumber: entry.episodeInfo?.lastEpisodeToAir?.episodeNumber ?? (entry.progress?.episodeNumber ?? 0) + 1
                     })}
-                    onMarkWatched={() => updateEntry(entry, { status: "watched" })}
+                    onMarkWatched={() => markEntryEpisodeWatched(entry, entry.episodeInfo?.lastEpisodeToAir)}
                   />
                 ))}
               </ContentRail>
@@ -2268,7 +2277,7 @@ function HomeWishlistCard({ item, onOpen, onEditProfile, onRemove }: {
           <span><StatusIcon size={14} /> {entry ? statusLabel[entry.status] : mediaLabel(item.media.mediaType)}</span>
           {entry?.profile.name && <span>{entry.profile.name}</span>}
         </div>
-        <div className="series-pill">{item.media.title}<span>›</span></div>
+        <div className="series-pill"><span className="series-pill-title">{item.media.title}</span><span className="series-pill-chevron">›</span></div>
         <h3>{entry && item.media.mediaType === "tv" ? episodeLabel(entry) : yearForMedia(item.media)}</h3>
         <p className="entry-card-context">
           {mediaLabel(item.media.mediaType)} · {yearForMedia(item.media)}
@@ -2784,7 +2793,7 @@ function EntryCard({ entry, compact = false, onOpen, onAdvance, onMarkWatched, o
           <span><StatusIcon size={14} /> {statusLabel[entry.status]}</span>
           <span>{entry.profile.name}</span>
         </div>
-        <div className="series-pill">{entry.media.title}<span>›</span></div>
+        <div className="series-pill"><span className="series-pill-title">{entry.media.title}</span><span className="series-pill-chevron">›</span></div>
         <h3>{entry.media.mediaType === "tv" ? episodeLabel(entry) : yearForMedia(entry.media)}</h3>
         <p className="entry-card-context">
           {mediaLabel(entry.media.mediaType)} · {yearForMedia(entry.media)}
