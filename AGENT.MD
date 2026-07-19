@@ -23,6 +23,97 @@ La app no busca ser un clon completo de Letterboxd/Trakt. El foco inicial es:
 - La autenticacion la resuelve Cloudflare Zero Trust; la app solo usa la identidad recibida para elegir defaults y auditoria liviana.
 - Todo lo que sea compartido debe ser visible para Juan y Camila. No hay privacidad fuerte en v1, solo organizacion por perfiles/listas.
 
+## Estado Real Actual Del Deploy
+
+Notas actualizadas de la sesion de deploy del 2026-07-19:
+
+- Repositorio GitHub: `https://github.com/juantubello/personal_series_tracker.git`.
+- Servidor Linux/homelab: repo clonado en `~/personal_series_tracker`.
+- Dominio publico final: `https://pipiseries.casapipis.net`.
+- Tunnel existente del host: `casapipis-tunnel`.
+- Cloudflared corre como servicio systemd del host, no dentro de este compose.
+- No usar `docker compose --profile tunnel` salvo que Juan pida explicitamente migrar cloudflared al compose.
+- Ingress agregado al tunnel del host:
+
+```yaml
+- hostname: pipiseries.casapipis.net
+  service: http://localhost:3015
+```
+
+- Esa regla debe estar antes de `- service: http_status:404`.
+- DNS route creado con:
+
+```bash
+cloudflared tunnel route dns casapipis-tunnel pipiseries.casapipis.net
+```
+
+- En DNS puede resolver a IPs proxied de Cloudflare (`104.x` / `172.x`); eso esta bien.
+- Nginx de esta app publica solo en loopback del servidor: `127.0.0.1:3015->80/tcp`.
+- Docker Compose levanta servicios `api`, `web` y `nginx`.
+- Los tres contenedores quedaron con `restart: unless-stopped`, por lo que vuelven solos tras reiniciar el servidor si no fueron detenidos manualmente.
+- Verificacion real que funciono en servidor:
+
+```bash
+curl -I http://127.0.0.1:3015
+curl http://127.0.0.1:3015/api/health
+```
+
+- `/api/health` devolvio `{"ok":true,...,"tmdbConfigured":true}`.
+- Para actualizar produccion:
+
+```bash
+cd ~/personal_series_tracker
+git pull
+docker compose up -d --build
+```
+
+- Si se cambian variables `NEXT_PUBLIC_*`, hay que rebuildar porque Next las inyecta en build.
+- Si se cambia `/etc/cloudflared/config.yml`, hay que correr:
+
+```bash
+sudo systemctl restart cloudflared
+sudo systemctl status cloudflared
+```
+
+### Env Productivo Importante
+
+No commitear el `.env` real. Valores/semantica que quedaron definidos:
+
+- `HOST_HTTP_PORT=127.0.0.1:3015`.
+- `NEXT_PUBLIC_API_URL=/api`.
+- `ENABLE_DEV_AUTH=false`.
+- `CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://pipiscats.cloudflareaccess.com`.
+- `CLOUDFLARE_ACCESS_AUD` es el `Application Audience (AUD) Tag` de la app de Cloudflare Access para `pipiseries.casapipis.net`.
+- `NEXT_PUBLIC_CF_ACCESS_CLIENT_ID` y `NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET` son los headers de Service Auth que Juan usa en sus otras apps para que las llamadas `/api` pasen Access.
+- Esos dos `NEXT_PUBLIC_*` son visibles desde DevTools para usuarios autorizados; se acepto ese tradeoff porque la app esta protegida por Zero Trust y es personal.
+- `CLOUDFLARED_TOKEN` debe quedar vacio si se usa el tunnel central del host.
+- `JUAN_EMAIL` y `CAMI_EMAIL` deben coincidir exactamente con los emails autenticados por Cloudflare Access.
+
+### Persistencia Y Backups
+
+- La DB productiva es SQLite en `data/app.db`.
+- Docker monta `./data:/data`; por eso recrear contenedores o reiniciar el servidor no borra la base.
+- Si no se migra una DB local al servidor, la app arranca vacia y crea/seed de perfiles/listas base.
+- `data/`, `.env` y `backups/` no se commitean.
+- Backup tecnico desde servidor:
+
+```bash
+npm run backup:docker
+```
+
+- Backup desde UI: `Perfil > Ajustes > Backup DB`.
+- Export JSON desde UI: `Perfil > Ajustes > Exportar JSON`.
+- El export JSON debe mantenerse compacto y no dominar la pantalla de Perfil.
+
+### PWA, Logo Y Cache
+
+- La app debe sentirse como PWA/iOS nativa: mobile-first, bottom nav fija, safe areas, acciones tactiles.
+- Se agregaron manifest, service worker e iconos PWA.
+- Logo principal incluido desde `apps/web/public/brand-logo.png`.
+- Iconos PWA incluidos: `icon-192.png`, `icon-512.png`, `maskable-icon-512.png`, `apple-touch-icon.png`.
+- Si el logo o assets viejos siguen apareciendo tras deploy, puede ser cache del service worker/PWA; pedir hard refresh o limpiar datos del sitio.
+- Ultimo ajuste subido del logo: commit `47245c4 Fix header logo sizing`.
+
 ## Usuarios, Perfiles Y Visibilidad
 
 La app sera usada por 2 usuarios autenticados por Cloudflare Zero Trust:
@@ -332,24 +423,24 @@ Si se usa SQLite:
 
 ## Docker Compose Sugerido
 
-Servicios esperados:
+Servicios reales/esperados:
 
-- `series-frontend`
-- `series-api`
-- `series-nginx`
+- `web`
+- `api`
+- `nginx`
 
 Si se usa SQLite, no hace falta contenedor de DB.
 
-Puertos sugeridos:
+Puertos reales:
 
 - Front interno: `3000`.
-- API interna/host: `9080` o similar.
-- Nginx local para Cloudflare: `127.0.0.1:18081:80`.
+- API interna: `8080`.
+- Nginx local para Cloudflare: `127.0.0.1:3015:80`.
 
 Usar un puerto distinto a CamiReads:
 
 - CamiReads usa `127.0.0.1:18080`.
-- Esta app podria usar `127.0.0.1:18081`.
+- Esta app usa `127.0.0.1:3015`.
 
 Todos los contenedores productivos deben tener:
 
@@ -384,7 +475,7 @@ http {
 
   server {
     listen 80;
-    server_name series.casapipis.net;
+    server_name pipiseries.casapipis.net;
 
     location ~ ^/_next/static/ {
       proxy_pass http://frontend;
@@ -422,8 +513,8 @@ No reutilizar puertos `80`/`443` del servidor.
 Agregar un hostname nuevo al tunnel existente:
 
 ```yaml
-- hostname: series.casapipis.net
-  service: http://localhost:18081
+- hostname: pipiseries.casapipis.net
+  service: http://localhost:3015
 ```
 
 Debe ir antes de:
@@ -442,7 +533,7 @@ sudo systemctl status cloudflared
 Crear ruta DNS si hace falta:
 
 ```bash
-cloudflared tunnel route dns casapipis-tunnel series.casapipis.net
+cloudflared tunnel route dns casapipis-tunnel pipiseries.casapipis.net
 ```
 
 ## Cloudflare Zero Trust
@@ -450,7 +541,7 @@ cloudflared tunnel route dns casapipis-tunnel series.casapipis.net
 Crear una Access Application nueva para el subdominio:
 
 ```text
-series.casapipis.net
+pipiseries.casapipis.net
 ```
 
 Policies:
@@ -532,13 +623,13 @@ No commitear `data/` ni `backups/` reales.
 
 - `docker compose up -d --build`.
 - `docker compose ps`.
-- `curl http://localhost:18081`.
-- `curl http://localhost:18081/api/health`.
+- `curl http://127.0.0.1:3015`.
+- `curl http://127.0.0.1:3015/api/health`.
 
 ### Cloudflare
 
 - `sudo systemctl status cloudflared`.
-- `https://series.casapipis.net` abre login de Zero Trust.
+- `https://pipiseries.casapipis.net` abre login de Zero Trust.
 - Entra Juan.
 - Entra Camila.
 - La UI carga y las llamadas `/api` funcionan.
