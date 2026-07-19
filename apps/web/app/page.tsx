@@ -1402,7 +1402,6 @@ export default function HomePage() {
       <header className="topbar">
         <div className="topbar-brand">
           <img className="brand-logo" src="/brand-logo.png" alt="PipiSeries" />
-          <h1>{detailEntry ? "Serie" : tab === "home" ? "Inicio" : tab === "search" ? "Buscar" : tab === "lists" ? selectedListId ? "Lista" : "Listas" : tab === "recs" ? "Recomendaciones" : "Perfil"}</h1>
         </div>
         {devUsers.length > 0 && (
           <label className="dev-switch">
