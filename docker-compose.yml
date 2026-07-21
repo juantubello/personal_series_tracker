@@ -10,6 +10,12 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8080
       DATABASE_PATH: /data/app.db
+    # El contenedor necesita salir a internet (Cloudflare Access JWKS + TMDB).
+    # El DNS del host (systemd-resolved 127.0.0.53) no es resoluble desde el
+    # contenedor, asi que fijamos resolvers publicos.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ./data:/data
     expose:
@@ -34,6 +40,9 @@ services:
       NODE_ENV: production
       API_INTERNAL_URL: http://api:8080
       NEXT_PUBLIC_API_URL: /api
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     expose:
       - "3000"
     depends_on:
